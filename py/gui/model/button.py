@@ -13,7 +13,7 @@ from gui.model.grid import Grid, TkGrid
 
 
 # Clickcommand is the method that is called when the button is pressed.
-class GuiButton(GuiWidget, ttk.Button):
+class GuiButton(ttk.Button, GuiWidget):
     def __init__(self, frame, grid: TkGrid, grid_tag: str, command: Callable, textvariable=None, command_kwargs: dict=(),
                  variable=None, event_bindings=(), width=None, **kwargs):
         """ Class for setting up tk Button widget.
@@ -42,9 +42,9 @@ class GuiButton(GuiWidget, ttk.Button):
         
         self.command_kwargs = command_kwargs
         self.command = command
-        
-        super().__init__(frame, grid_tag, grid, event_bindings)
-        super(GuiWidget, self).__init__(command=self.execute_command, **kwargs)
+
+        super().__init__(command=self.execute_command, **kwargs)
+        super(GuiWidget, self).__init__(frame, grid_tag, grid, event_bindings)
         self.add_tk_var(var=tk.BooleanVar() if variable is None else variable, key='bool')
         self.add_tk_var(var=tk.StringVar() if textvariable is None else textvariable, key='text')
         
