@@ -96,39 +96,13 @@ class TkGrid:
                 break
         self.widgets[tag] = WidgetDimensions(x, y, w, h)
     
-    def get_dims(self, tag, **kwargs) -> Dict[str, int]:
+    def get_dims(self, tag, padx: int = 0, pady: int = 0, sticky: str = 'N', **kwargs) -> Dict[str, int]:
         """ Get the dimensions for widget `tag` and update dict w/ kwargs. Output can be passed directly to ttk.grid(). """
         if self.widgets.get(tag) is None:
             raise RuntimeError(f"Unable to find tag {tag} in this grid")
         output = self.widgets.get(tag)._asdict()
-        output.update(kwargs)
+        output.update({'padx': padx, 'pady': pady, 'sticky': sticky})
         return output
-
-
-class Grid:
-    """
-    Grid class used to assign spaces within the GUI to widgets that are identified through tags.
-    Given a list of strings, where each character represents a widget, grid attributes are derived
-    from this string representation and automatically submitted.
-    """
-    def __init__(self, tag: str, g, padx: int = 0, pady: int = 0, padxy: Tuple[int, int] = None, sticky: str = 'N'):
-        self.tag = tag
-        
-        if len(dims) == 2:
-            self.x, self.y = dims
-            self.w, self.h = 1, 1
-        elif len(dims) == 4:
-            self.x, self.y, self.w, self.h = dims
-        else:
-            raise ValueError('dims should consist of 2 digits (x, y) or 4 digits (x, y, w, h)')
-        
-        if padxy is not None:
-            self.padx, self.pady = padxy
-        else:
-            self.padx = padx
-            self.pady = pady
-        
-        self.sticky = sticky
 
 
 if __name__ == '__main__':
