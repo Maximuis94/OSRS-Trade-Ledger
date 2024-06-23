@@ -16,7 +16,10 @@ def import_data(generate_arrays: bool = False):
     insert_items()
 
     # Generate + VACUUM the npy db and compute listbox entries for GUI
-    NpyDbUpdater(execute_update=True, add_arrays=generate_arrays).execute("VACUUM")
+    db = NpyDbUpdater(execute_update=True, add_arrays=generate_arrays)
+    
+    print('VACUUMing db...')
+    db.execute("VACUUM")
     
     print(f'\n\nDone! Total time taken: {fmt.delta_t(int(time.perf_counter()-_time))}')
     _ = input('  Press ENTER to close')
