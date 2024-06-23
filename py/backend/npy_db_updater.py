@@ -328,8 +328,8 @@ class NpyDbUpdater(Database):
             #     print(_s)
             if self.sql_keys is None:
                 self.sql_keys = tuple(self.sql.keys())
-            print(self.sql['insert'])
-            exit(1)
+            # print(self.sql['insert'])
+            # exit(1)
             # print(self.sql.get('fetch_wiki'))
     
     def save_prices_listbox(self):

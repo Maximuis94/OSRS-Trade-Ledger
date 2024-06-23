@@ -360,6 +360,8 @@ def submit_transaction_queue(queue_file: str = gp.f_exchange_log_queue, submit_d
     
     update_ts = int(time.time())
     q = pd.DataFrame(gp.load_data(queue_file))
+    
+    print(q)
     q['item_id'] = q['item_id'].apply(lambda r: r if not isinstance(r, Item) else r.item_id)
     print(q)
     n = len(q)
@@ -534,9 +536,9 @@ def update_transaction_ids(t_id: int, to_db_file: str = gp.f_db_local.replace('.
     shutil.copy(gp.f_db_local, to_db_file)
     con = sqlite3.connect(to_db_file)
     c = con.cursor()
-    transactions = pd.read_sql(sql='SELECT * FROM transactions', con=con)
+    transactions = pd.read_sql(sql="SELECT * FROM 'transaction'", con=con)
     to_do = transactions.loc[transactions['transaction_id'] > t_id].sort_values(by='transaction_id', ascending=True)
-    sql_exe = "UPDATE transactions SET transaction_id = :new_id WHERE transaction_id = :transaction_id"
+    sql_exe = "UPDATE 'transaction' SET transaction_id = :new_id WHERE transaction_id = :transaction_id"
     for values_dict in to_do.to_dict('records'):
         c.execute(sql_exe, {'transaction_id': values_dict.get('transaction_id'), 'new_id': t_id})
         t_id += 1
@@ -553,8 +555,8 @@ def parse_transaction_thread_call():
     
     
 def parse_logs_background():
-    if not process_logs(add_current=False):
-        exit(1)
+    # if not process_logs(add_current=False):
+    #     exit(1)
     submit_transaction_queue(submit_data=True)
     update_submitted_lines()
     
