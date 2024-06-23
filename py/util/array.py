@@ -7,6 +7,7 @@ from collections.abc import Iterable, Container
 from typing import Callable
 
 import numpy as np
+import pandas as pd
 
 
 def add_col(columns: list, ar: np.ndarray, column_name: str, values: np.ndarray, n_decimals: int = None):
@@ -145,8 +146,24 @@ def unique_values(_set: Iterable, return_type: Callable = list, sort_ascending: 
     return return_type(_set)
 
 
-    
-    
+df_filter_num_operators = ['<', '>', '<=', '>=', '==']
+df_filter_str_operators = []
+
+
+def df_filter_num(df: pd.DataFrame, column: str, operator: str, value: int or float) -> pd.DataFrame:
+    """ Apply the input parameters to the given df to filter it """
+    if operator == '<':
+        return df.loc[df[column] < value]
+    if operator == '>':
+        return df.loc[df[column] > value]
+    if operator == '<=':
+        return df.loc[df[column] <= value]
+    if operator == '>=':
+        return df.loc[df[column] >= value]
+    if operator == '==':
+        return df.loc[df[column] == value]
+    print(f'Unable to filter numerical df values with input operator {operator}')
+    return df
 
 
 # def get_wiki_timestamps(item_id: int = 2, min_ts: int = None, max_ts: int = None, ts_threshold: int = None):
