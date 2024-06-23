@@ -6,10 +6,10 @@ Module with models for Gui Buttons (Button, Checkbutton, Radiobutton)
 """
 import tkinter as tk
 import tkinter.ttk as ttk
-from collections.abc import Iterable, Collection, Callable
+from collections.abc import Callable
 
+from gui.model.grid import TkGrid
 from gui.model.gui_widget import GuiWidget
-from gui.model.grid import Grid, TkGrid
 
 
 # Clickcommand is the method that is called when the button is pressed.
