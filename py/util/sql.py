@@ -7,8 +7,12 @@ This module contains various methods with sqlite database interactions.
 import os
 import sqlite3
 import time
+from collections.abc import Iterable
 from typing import Dict
 
+import pandas as pd
+
+import sqlite.row_factories
 import util.str_formats as fmt
 import sqlite.row_factories as row_factory
 
@@ -157,5 +161,58 @@ def vacuum_into(src_db: str, target_db: str = None, user_prompt: bool = False):
     else:
         print(f'VACUUM was completed in {fmt.passed_time(t0, True)}')
 
+
+def analyze_db(db_path: str, tables: Iterable[int or str], columns: Iterable[str] = (), where: str = '', out_file: str = None,
+               non_zero_values: bool = True):
+    """
+    Analyze the values within the db on a per-table basis by row-count a by min and max values per column in `columns`
+    
+    Parameters
+    ----------
+    db_path : str
+        Path to the to-be-analyzed database
+    tables : Iterable[int]
+        An Iterable with item_ids used to identify the tables OR table names. Should refer to an existing item or an
+        existing table.
+    columns : Iterable[str], optional, () by default
+        A list of column_names that is to be analyzed for minimum and maximum values
+    where : str
+        WHERE clause to append to the sql statement
+    out_file : str, optional, None by default
+        If given, export results to this path, else generate a file name based on `db_path`
+    non_zero_values : bool, optional, True by default
+        If True, only include non-zero  values in the per-column analysis
+
+    Returns
+    -------
+
+    """
+    db = sqlite3.connect(database=f"file:{db_path}?mode=ro", uri=True)
+    output = []
+    if out_file is None:
+        cur = 0
+        out_file = os.path.splitext(db_path)[0]+f'_analysis_{cur:0>3}.csv'
+        while os.path.exists(out_file):
+            cur += 1
+            out_file = os.path.splitext(db_path)[0]+f'_analysis_{cur:0>3}.csv'
+    db.row_factory = sqlite.row_factories.factory_dict
+    if len(where) > 0:
+        where = ' WHERE ' + where.replace('WHERE', '')
+    for i in tables:
+        if isinstance(i, int):
+            t = f'item{i:0>5}'
+        elif isinstance(i, str):
+            t = i
+        try:
+            e = db.execute(f"SELECT {i} AS item_id, COUNT(*) AS row_count FROM {t} {where}").fetchone()
+            
+            for c in columns:
+                _where = where + f'{" AND" if len(where)>0 else " WHERE"} {c} > 0' if non_zero_values else where
+                e.update(db.execute(f"SELECT MIN({c}) AS min_{c}, MAX({c}) AS max_{c} FROM {t} {_where}").fetchone())
+            output.append(e)
+        except WindowsError:
+            ...
+    pd.DataFrame(output).to_csv(out_file, index=False)
+    print('Saved csv file at', out_file)
 
 
