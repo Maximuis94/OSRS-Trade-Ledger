@@ -22,7 +22,7 @@ max_transfer_time = 600
 npy_list_update_frequency = 86400 * 7
 
 # t0 of NpyArray is equal to unix_time - npy_array_timespan_days*86400, rounded down to 12 am utc
-npy_array_timespan_days = 60
+npy_array_timespan_days = 120
 
 # Filter very small transactions and price probes
 db_quantity_threshold = 3

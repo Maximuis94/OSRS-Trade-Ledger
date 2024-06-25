@@ -124,7 +124,7 @@ class NpyDbUpdater(Database):
             self.prices_listbox = None
 
         self.placeholder = [[0, 0]]
-        print(f'Npy items: {len(item_ids)} Npy timespan was set to [{ut.loc_unix_dt(self.t0)} - '
+        print(f'\tNpy items: {len(item_ids)} Npy timespan was set to [{ut.loc_unix_dt(self.t0)} - '
               f'{ut.loc_unix_dt(self.t1)}]')
         if execute_update or new_db:
             # print(f'Created tables in {fmt.delta_t(time.perf_counter()-self.t_start)}')
@@ -136,7 +136,7 @@ class NpyDbUpdater(Database):
             # while n_done is None or n_done > 0:
             #     n_done = self.insert_row_data(start_idx=n_done)
             tpc = time.perf_counter()
-            print(f'Done! Insert time: {fmt.delta_t(tpc-start_insert)} Total runtime: {fmt.delta_t(tpc-self.t_start)}')
+            print(f'\n\tDone! Insert time: {fmt.delta_t(tpc-start_insert)} Total runtime: {fmt.delta_t(tpc-self.t_start)}')
         self.con = None
         
     def configure_default_timestamps(self):
@@ -155,12 +155,12 @@ class NpyDbUpdater(Database):
         """ Print a progress update while generating the database """
         n_tables = f"New tables: {n_created}  " if n_created > 0 else ""
         if len(exe_times_item) > 0:
-            print(f' [{fmt.delta_t(time.perf_counter() - self.t_start)}] Items: {idx + 1}/{n_items}  '
+            print(f'\t[{fmt.delta_t(time.perf_counter() - self.t_start)}] Items: {idx + 1}/{n_items}  '
                   f'Db size: +{fmt.fsize(os.path.getsize(self.db_path) - self.db_size_start)}  '
                   f'Rows [+ {n_rows} / - {n_deleted}]  {n_tables}'
                   f'Avg/item: {fmt.delta_t(sum(exe_times_item) / len(exe_times_item))}', end='\r')
         else:
-            print(f' [{fmt.delta_t(time.perf_counter() - self.t_start)}] Items: {idx + 1}/{n_items}  '
+            print(f'\t[{fmt.delta_t(time.perf_counter() - self.t_start)}] Items: {idx + 1}/{n_items}  '
                   f'Db size: +{fmt.fsize(os.path.getsize(self.db_path) - self.db_size_start)}  '
                   f'Rows [+ {n_rows} / - {n_deleted}]  {n_tables}', end='\r')
     
@@ -191,7 +191,7 @@ class NpyDbUpdater(Database):
         rows)
 
         """
-        print(f'Updating Npy array db...')
+        print(f'\tUpdating Npy array db...')
         if t0 is None:
             t0 = self.t0
         if t1 is None:
@@ -415,6 +415,8 @@ class NpyDbUpdater(Database):
             return
         self.update_item_id(item_id=item_id)
         global cols, ar
+        
+        # Disable warnings
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")
             warnings.warn("deprecated", DeprecationWarning)
