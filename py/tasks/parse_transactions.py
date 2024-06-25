@@ -361,9 +361,7 @@ def submit_transaction_queue(queue_file: str = gp.f_exchange_log_queue, submit_d
     update_ts = int(time.time())
     q = pd.DataFrame(gp.load_data(queue_file))
     
-    print(q)
     q['item_id'] = q['item_id'].apply(lambda r: r if not isinstance(r, Item) else r.item_id)
-    print(q)
     n = len(q)
     q = q.sort_values(by=['timestamp', 'item_id', 'is_buy'], ascending=[True, True, False]).drop_duplicates()
     if n != len(q):
@@ -555,8 +553,15 @@ def parse_transaction_thread_call():
     
     
 def parse_logs_background():
-    # if not process_logs(add_current=False):
-    #     exit(1)
+    if not process_logs(add_current=False):
+        exit(1)
+    submit_transaction_queue(submit_data=True)
+    update_submitted_lines()
+    
+    
+def parse_logs():
+    if not process_logs(add_current=True):
+        exit(1)
     submit_transaction_queue(submit_data=True)
     update_submitted_lines()
     

@@ -87,6 +87,7 @@ class Transaction(_Transaction):
             self.__dict__.update(self.item.__dict__)
         except AttributeError:
             ...
+        self.executed = False
     
     def update_transaction(self, values: dict):
         """ Update transaction attributes with values from `updated_values`. Certain attributes cannot be updated. """

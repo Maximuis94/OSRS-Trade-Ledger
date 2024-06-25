@@ -105,6 +105,9 @@ NpyWikiTuple = namedtuple('NpyWikiTuple', ['item_id', 'timestamp', 'price', 'vol
 
 IndexTuple = namedtuple('IndexTuple', ['name', 'columns'])
 
+ExeLogEntry = namedtuple('ExeLogEntry', ['transaction_id', 'timestamp', 'price', 'balance', 'profit', 'value',
+                                         'n_bought', 'n_purchases', 'n_sold', 'n_sales'])
+
 
 @dataclass(order=True, match_args=True)
 class Transaction:
@@ -121,6 +124,8 @@ class Transaction:
     status: int = field(compare=False)
     tag: str = field(compare=False)
     update_ts: int = field(compare=False)
+    
+    # Post-transactional-values?
 
 
 # Datapoint classes are datapoints of scraped data
