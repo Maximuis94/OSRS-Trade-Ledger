@@ -1,8 +1,13 @@
 """
 Module with dataclass definitions used throughout the project
 
+
+Data classes
 Data Classes can be used to dynamically generate classes that represent a data element (e.g. sql table row), the full
 extent as to how the class is defined, depends on the arguments passed to the dataclasses decorator.
+Data classes can be used to quickly generate a class designed to carry a specific amount of values, while automatically
+generating certain methods, e.g. for fetching attribute names, string representation or annotations.
+
 
 NamedTuple
 A namedtuple is a basic dataclass that works like a tuple, but its elements can be accessed via a label, e.g.
@@ -16,6 +21,7 @@ It can also be converted to a dict with relative ease and it can still be used a
 In summary, namedtuples appear to be a better alternative to very simple model classes that do not have any methods.
 See the class representation below on how to use some if its features.
 
+
 References
 ----------
 Data Classes:
@@ -24,44 +30,16 @@ Data Classes:
 collections.namedtuple:
     https://docs.python.org/3.10/library/collections.html#collections.namedtuple
 """
-import dataclasses
-import sqlite3
+from abc import ABC, abstractmethod
 from collections import namedtuple
-from collections.abc import Iterable, Container, Sequence, Collection
-from typing import Tuple, List
+from collections.abc import Sequence
+from dataclasses import dataclass, field
+from typing import Tuple
 
 import numpy as np
-from dataclasses import dataclass, field
-from abc import ABC, abstractmethod, abstractproperty
-
 from overrides import override
 
-import global_variables.path as gp
-local_db = sqlite3.connect(database=f'file:{gp.f_db_local}?mode=ro', uri=True)
-
-#######################################################################################################################
-# Class representation of NamedTuple = namedtuple('NamedTuple', ['timestamp', 'item_id', 'price', 'volume'])
-#######################################################################################################################
-
-class NamedTuple:
-    _ = namedtuple('NamedTuple', ['timestamp', 'item_id', 'price', 'volume'])
-    defaults = [0]
-    _fields = ('timestamp', 'item_id', 'price', 'volume')
-    if len(defaults) > 0:
-        _field_defaults = {k: v for k, v in zip(reversed(_fields[-len(defaults):]), defaults)}
-    
-    def __init__(self, *args, defaults=(), **kwargs):
-        # Can be initialized via positional args...
-        self.timestamp, self.item_id, self.price, self.volume = list(args)
-        
-        # ...As well as keyword args
-        self.__dict__.update(kwargs)
-    
-    def _fields(self):
-        return tuple(self.__dict__.keys())
-    
-    def values(self):
-        return self._._field_types
+from global_variables import path as gp
 
 
 #######################################################################################################################
@@ -94,7 +72,7 @@ class Timeseries:
     def __eq__(self, other):
         try:
             return self.n == other.n and self.x == other.x and self.y == other.y
-        except AttributeError as e:
+        except AttributeError:
             return False
 
 
@@ -107,6 +85,14 @@ IndexTuple = namedtuple('IndexTuple', ['name', 'columns'])
 
 ExeLogEntry = namedtuple('ExeLogEntry', ['transaction_id', 'timestamp', 'price', 'balance', 'profit', 'value',
                                          'n_bought', 'n_purchases', 'n_sold', 'n_sales'])
+
+RbpiDb = namedtuple('RbpiDb', ['path', 'table'])
+rbpi_dbs = {
+    'avg5m': RbpiDb(gp.f_rbpi_db_avg5m, 'avg5m'),
+    'realtime': RbpiDb(gp.f_rbpi_db_realtime, 'realtime'),
+    'wiki': RbpiDb(gp.f_rbpi_db_wiki, 'wiki'),
+    'item': RbpiDb(gp.f_rbpi_db_item, 'itemdb')
+}
 
 
 @dataclass(order=True, match_args=True)
@@ -136,11 +122,9 @@ class Transaction:
     n_sales: int = field(default=0, compare=False)
     tax: int = field(default=0, compare=False)
     
-
-
-
+    
 # Datapoint classes are datapoints of scraped data
-datapoint_kwargs = {
+_datapoint_kwargs = {
     'init': True,
     'eq': True,
     'order': True,
@@ -150,21 +134,16 @@ datapoint_kwargs = {
 
 _ytype = int or float
 
-
-@dataclass(init=True, frozen=True, order=True)
-class TimeseriesDatapoint:
-    """
-    A timeseries datapoint. A pair of values, of which the first value is a unix timestamp and the other value is the
-    corresponding y-value.
-    Datapoints are immutable and are typically used in plots, where the timestamp represents an x-coordinate, while the
-    other value represents the y-coordinate.
-    
-    """
-    timestamp: int
-    value: int or float
+"""
+A timeseries datapoint. A pair of values, of which the first value is a unix timestamp and the other value is the
+corresponding y-value.
+Datapoints are immutable and are typically used in plots, where the timestamp represents an x-coordinate, while the
+other value represents the y-coordinate.
+"""
+TimeseriesDatapoint = namedtuple('TimeseriesDatapoint', ['timestamp', 'value'])
 
 
-@dataclass(**datapoint_kwargs)
+@dataclass(**_datapoint_kwargs)
 class PlotStats:
     """
     Statistics for a plot
@@ -180,7 +159,7 @@ class PlotStats:
     n: int
     
 
-def get_plotstats(x: Sequence, y: list):
+def get_plotstats(x: Sequence, y: list) -> PlotStats:
     y.sort()
     n = len(y)
     return PlotStats(
@@ -200,7 +179,7 @@ def get_plotstats(x: Sequence, y: list):
 Row = namedtuple('Row', ['item_id', 'src', 'timestamp', 'price', 'volume'])
 
 
-@dataclass(**datapoint_kwargs)
+@dataclass(**_datapoint_kwargs)
 class TimeseriesRow:
     """
     Class representation of a timeseries entry as found in the Database.
@@ -231,7 +210,7 @@ class LegacyDatapoint(ABC):
         ...
 
 
-@dataclass(**datapoint_kwargs)
+@dataclass(**_datapoint_kwargs)
 class Avg5mDatapoint(LegacyDatapoint):
     """
     Class representation of an Avg5m Datapoint.
@@ -248,10 +227,10 @@ class Avg5mDatapoint(LegacyDatapoint):
     def convert_datapoint(self, buy: bool) -> TimeseriesRow:
         """ Return this Avg5mDatapoint as a TimeseriesRow """
         return TimeseriesRow(self.item_id, 1, self.timestamp, self.buy_price, self.buy_volume) if buy else \
-                    TimeseriesRow(self.item_id, 2, self.timestamp, self.sell_price, self.sell_volume)
+            TimeseriesRow(self.item_id, 2, self.timestamp, self.sell_price, self.sell_volume)
         
 
-@dataclass(**datapoint_kwargs)
+@dataclass(**_datapoint_kwargs)
 class RealtimeDatapoint(LegacyDatapoint):
     """
     Class representation of a Realtime Datapoint.
@@ -268,7 +247,7 @@ class RealtimeDatapoint(LegacyDatapoint):
         return TimeseriesRow(self.item_id, 4-int(self.is_buy), self.timestamp, self.price, 0)
 
 
-@dataclass(**datapoint_kwargs)
+@dataclass(**_datapoint_kwargs)
 class WikiDatapoint(LegacyDatapoint):
     """
     Class representation of a wiki datapoint
@@ -288,7 +267,7 @@ def keep_row_element(key: str):
     return key.split('_')[0] in ('item', 'timestamp', 'price', 'volume', 'buy', 'sell', 'is')
 
 
-@dataclass(**datapoint_kwargs)
+@dataclass(**_datapoint_kwargs)
 class NpyDatapoint:
     """
     A representation for a single datapoint within a NpyArray
@@ -433,5 +412,4 @@ class NpyArray:
 
 
 if __name__ == '__main__':
-    import time
     ...
