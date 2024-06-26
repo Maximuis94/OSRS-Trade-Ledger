@@ -15,21 +15,16 @@ of parameters. This is covered in more detail in the base Row class.
 The base class Row is also implemented by Table, which acts as the controller of a sqlite table.
 """
 import os
-from collections.abc import Iterable
-from typing import Type, Tuple, Callable, Dict, List
+import sqlite3
+from typing import Type, Tuple, Callable, Dict, List, Iterable
 
-import global_variables.configurations as cfg
-import sqlite.row_factories as factories
+import pandas as pd
+
 import util.data_structures as ud
 from global_variables import variables as var
-from global_variables.classes import SingletonMeta
 from global_variables.data_classes import *
-from global_variables.osrs import npy_items
-from global_variables.path import f_db_local, f_db_timeseries
-from model.item import Item
-from model.transaction import Transaction
 from sqlite.executable_statements import insert_sql_dict
-from util.sql import get_db_contents, get_tables
+from util.sql import get_db_contents
 
 
 #######################################################################################################################
@@ -133,10 +128,6 @@ class Column:
                f'{f" DEFAULT {def_val}" if def_val is not None and not self.is_unique else ""}' \
                f'{f" {var.get_check(self.name)}" if self.add_check else ""}'   # \
         # f'{f" CHECK ({self.constraints})" if isinstance(self.constraints, str) else ""}'
-    
-    # def verify_value(self, value) -> bool:
-    #     """ Check if `value` falls within the expected value range. Try to cast it if its typing is different. """
-    #     return self.verify(value) if isinstance(value, self.dtype.py) else self.verify(self.dtype.py(value))
 
 
 #######################################################################################################################
@@ -203,7 +194,7 @@ class Row:
     create_table: str
     index: List[IndexTuple]
     
-    def __init__(self, row_tuple: Callable, db_file: str = None, column_list=None, name=None, **kwargs):
+    def __init__(self, row_tuple: Callable, db_file: str = None, **kwargs):
         self.db_file = db_file
         self.model = dict
         
@@ -215,11 +206,12 @@ class Row:
             else:
                 # print('row tuple', row_tuple, )
                 self.name = row_tuple.__name__[:-5].lower()
-                if Row.__subclasscheck__(type(row_tuple)):
-                    self.row_tuple = row_tuple.row_tuple
-                else:
-                    self.row_tuple = row_tuple
-                self.column_list = list(self.row_tuple.__match_args__)
+                self.row_tuple = row_tuple
+                try:
+                    self.column_list = list(self.row_tuple.__match_args__)
+                except AttributeError:
+                    self.column_list = list(self.row_tuple._fields)
+
             self.column_tuple = ud.get_sorted_tuple(self.column_list)
             try:
                 self.columns, columns = {}, kwargs.get('columns')
@@ -248,6 +240,7 @@ class Row:
             print(f"column_class should be the Column model class")
             raise e
 
+        # These strings can be executed while passing the this Row as a tuple/dict
         self.insert_dict = insert_sql_dict(row={col: '' for col in self.column_list}, table=self.name, replace=False)
         self.insert_replace_dict = 'INSERT OR REPLACE' + self.insert_dict[6:]
         self.insert_tuple = self.insert_dict.split(' VALUES ')[0] + ' VALUES ' + \
@@ -263,7 +256,6 @@ class Row:
 
         self.create_table = self.sql_create_table()
         # print(self.create_table)
-        
         
     def to_tuple(self, row_dict: dict) -> tuple:
         """ Return the values of `row_dict` as a tuple, it being ordered exactly like this Row's column_list """
@@ -281,6 +273,90 @@ class Row:
             A namedtuple instance that corresponds to the subclass' sqlite table rows.
         """
         return self.row_tuple(*args, **kwargs)
+
+
+class Table(Row):
+    """
+    Class that represents a table within a sqlite database. Row is a model class for Table, as a table usually is
+    composed of 0 or more rows that are formatted similarly.
+    """
+
+    def __init__(self, table_name: str, db_file: str, row_tuple: Type[tuple] = None, **kwargs):
+        """
+        
+        Parameters
+        ----------
+        file: str
+            The database file that this table resides in
+        table_name : str
+            The name of this table
+        columns : model.table.Column or Iterable
+            One or more columns to add to this Table
+        foreign_keys : dict or Iterable, optional, None by default
+        """
+        self.db_file = db_file
+        
+        if row_tuple is None:
+            column_list = [c.name for c in kwargs.get('columns')]
+            row_tuple = namedtuple(table_name+'Tuple', column_list)
+        super().__init__(table_name=table_name, row_tuple=row_tuple, db_file=db_file, **kwargs)
+        
+    def insert_row(self, row: tuple, c: (sqlite3.Connection, sqlite3.Cursor) = None, replace: bool = True):
+        """ Insert values of `row` into this table """
+        if c is None:
+            if self.db_file is None or not os.path.exists(self.db_file):
+                raise FileNotFoundError(f'No db file was configured for table {self.name}, not was a connection passed')
+            c = sqlite3.connect(self.db_file)
+            self.insert_row(row=row, c=c, replace=replace)
+            c.commit()
+            c.close()
+        else:
+            c.execute(self.sql_insert(replace=replace, row=row), row)
+    
+    def sql_update_rows(self, c: sqlite3.Cursor or sqlite3.Connection, columns, values, suffix):
+        # TODO
+        raise NotImplementedError
+        
+    def modify_table(self, columns: Column or Iterable, **kwargs):
+        """ Add Column(s) `columns` to this Table and re-assess sql statements, primary keys and such """
+        if isinstance(columns, Column):
+            columns = [columns]
+        for col in columns:
+            if len(col) < 2:
+                continue
+            if isinstance(col, Column):
+                self.columns[col.name] = col
+            else:
+                self.columns[col] = Column(col)
+        self.primary_keys = tuple([col.name for _, col in self.columns.items() if col.is_primary_key])
+        
+        # TODO
+        raise NotImplementedError
+    
+    def insert_rows(self, rows: Iterable, con: sqlite3.Connection, replace: bool = True):
+        """ Insert `row` into this database table through `con` by executing `sql` """
+        sql = self.insert_replace_dict if replace else self.insert_dict
+        for row in rows:
+            con.execute(sql, row)
+    
+    def as_df(self) -> pd.DataFrame:
+        """ Return this table as an empty dataframe with the same columns and appropriate dtypes """
+        return pd.DataFrame().astype(dtype={c: var.get_dtype(c).df for c in list(self.columns.keys())})
+    
+    def select_(self, where: (str or Iterable), parameters: list = None, order_by: str = None) -> str:
+        """ Return an executable SELECT statement using the WHERE clause. Verify result if parameters are passed """
+        # sql = self.select
+        # if parameters is None:
+        #     sql += f" {where if isinstance(where, str) else where_clause(conditions=where)}"
+        # else:
+        #     # Verify resulting where_clause before returning it. Note that this significantly increases runtime.
+        #     where = where_clause(conditions=where)
+        #     sql += f" {where}"
+        # if order_by is not None:
+        #     sql += f" {order_by}"
+        # return sql
+        # TODO
+        raise NotImplementedError
     
     def sql_insert(self, row, replace: bool = True, **kwargs) -> Tuple[str, tuple or dict]:
         """ Return an executable sql insert (or replace) statement for a Row subclass """
@@ -439,300 +515,24 @@ class Row:
             return sql.replace('SELECT *', f'SELECT *, COUNT(*)'), parameters
         else:
             return sql.replace('SELECT *', 'SELECT COUNT(*)'), parameters
-    
-    @staticmethod
-    @abstractmethod
-    def row_tuple_factory(c: sqlite3.Cursor, row: tuple):
-        """ Return the row as a labeled tuple. Can be set as sqlite3.Connection.row_factory """
-        ...
-    
-    @staticmethod
-    @abstractmethod
-    def row_model_factory(c: sqlite3.Cursor, row: tuple):
-        """ Return the row as a labeled tuple. Can be set as sqlite3.Connection.row_factory """
-        ...
 
-
-#######################################################################################################################
-# Row subclasses
-#######################################################################################################################
-
-class ItemRow(Row, metaclass=SingletonMeta):
-    """ Template class for an entry of the item table in the sqlite db """
-    name = 'item'
-    row_tuple = Item
-    column_list = row_tuple.__match_args__
-    model = Item
-    
-    def __init__(self, **kwargs):
-        super().__init__(row_tuple=self.row_tuple)
-    
-    @staticmethod
-    @override
-    def row_tuple_factory(c: sqlite3.Cursor, row: tuple) -> Item:
-        return ItemRow.row_tuple(*row)
-    
-    @override
-    def sql_select(self, item_id: (int, Iterable[int]) = None, **kwargs) -> str:
-        """ Generate a sql select statement for an item_row. """
-        if item_id is None:
-            return self.select
-        elif isinstance(item_id, int):
-            return self.select_item.replace('__item_id__', f'item_id={item_id} ')
-        elif isinstance(item_id, Iterable):
-            return self.select_item.replace('__item_id__', f'item_id IN {str(tuple(item_id))} ')
-        raise TypeError(F'Sql select only accepts item_id as None, int or an Iterable...')
-
-
-class TransactionRow(Row, metaclass=SingletonMeta):
-    """ Template class for an entry of the transaction table in the sqlite db """
-    name = 'transaction'
-    
-    row_tuple = Transaction
-    column_list = row_tuple.__match_args__
-    model = Transaction
-    
-    def __init__(self, **kwargs):
-        super().__init__(row_tuple=self.row_tuple)
-    
-    @staticmethod
-    @override
-    def row_tuple_factory(c: sqlite3.Cursor, row: tuple) -> Transaction:
-        """ Returns a tuple parsed from the sqlite db as a labelled tuple """
-        return TransactionRow.row_tuple(*row)
-    
-    @staticmethod
-    @override
-    def row_model_factory(c: sqlite3.Cursor, row: tuple) -> Transaction:
-        """ Returns a tuple parsed from the sqlite db as a labelled tuple """
-        return TransactionRow.model(*row)
-
-
-class Avg5mRow(Row, metaclass=SingletonMeta):
-    """ Template class for an entry of the avg5m table in the sqlite db """
-    name = 'avg5m'
-    row_tuple = Avg5mDatapoint
-    column_list = row_tuple.__match_args__
-    # model = Avg5m
-    
-    def __init__(self, **kwargs):
-        super().__init__(row_tuple=self.row_tuple, **kwargs)
-    
-    @staticmethod
-    @override
-    def row_tuple_factory(c: sqlite3.Cursor, row: tuple) -> Avg5mDatapoint:
-        """ Returns a tuple parsed from the sqlite db as a labelled tuple """
-        return Avg5mRow.row_tuple(*row)
-    
-    @staticmethod
-    @override
-    def row_model_factory(c: sqlite3.Cursor, row: tuple) -> Avg5mDatapoint:
-        """ Returns a tuple parsed from the sqlite db as a labelled tuple """
-        return Avg5mRow.row_tuple(*row)
-
-
-class RealtimeRow(Row, metaclass=SingletonMeta):
-    """ Template class for an entry of the realtime table in the sqlite db """
-    name = 'realtime'
-    row_tuple = RealtimeDatapoint
-    column_list = row_tuple.__match_args__
-    # model = Realtime
-    
-    def __init__(self, **kwargs):
-        super().__init__(row_tuple=self.row_tuple, **kwargs)
-    
-    def sql_select(self, **kwargs) -> Tuple[str, tuple]:
-        """
-        Generate a sql select statement for querying realtime rows, with an additional `is_buy` parameter.
-        
-        Parameters
-        ----------
-        kwargs :
-
-        Returns
-        -------
-        
-        Notes
-        -----
-        When querying for realtime rows, keep in mind that realtime rows are scraped every minute (as opposed to avg5m
-        which is once per 5 minutes, or the once per day for the wiki). If an item is frequently traded, a select query
-        can yield up to ~2800 rows per day for that item.
-
-        """
-        if kwargs.get('suffix') is not None:
-            suffix = kwargs.get('suffix')
-            del kwargs['suffix']
-        else:
-            suffix = ""
-        is_buy = f" AND is_buy={int(kwargs.get('is_buy'))} " if isinstance(kwargs.get('is_buy'), (int, bool)) else " "
-        
-        return super().sql_select(suffix=is_buy+suffix, **kwargs)
-    
-    @staticmethod
-    @override
-    def row_tuple_factory(c: sqlite3.Cursor, row: tuple) -> RealtimeDatapoint:
-        """ Returns a tuple parsed from the sqlite db as a labelled tuple """
-        return RealtimeRow.row_tuple(*row)
-    
-    @staticmethod
-    @override
-    def row_model_factory(c: sqlite3.Cursor, row: tuple) -> RealtimeDatapoint:
-        """ Returns a tuple parsed from the sqlite db as a labelled tuple """
-        return RealtimeRow.row_tuple(*row)
-
-
-class WikiRow(Row, metaclass=SingletonMeta):
-    """ Template class for an entry of the wiki table in the sqlite db """
-    name = 'wiki'
-    row_tuple = WikiDatapoint
-    column_list = row_tuple.__match_args__
-    # model = Wiki
-    
-    def __init__(self, **kwargs):
-        super().__init__(row_tuple=self.row_tuple, **kwargs)
-    
-    @staticmethod
-    @override
-    def row_tuple_factory(c: sqlite3.Cursor, row: tuple) -> WikiDatapoint:
-        """ Returns a tuple parsed from the sqlite db as a labelled tuple """
-        return WikiRow.row_tuple(*row)
-    
-    @staticmethod
-    @override
-    def row_model_factory(c: sqlite3.Cursor, row: tuple) -> WikiDatapoint:
-        """ Returns a tuple parsed from the sqlite db as a labelled tuple """
-        return WikiRow.row_tuple(*row)
-
-
-class NpyAvg5mRow(Avg5mRow):
-    name = 'npy_avg5m'
-    row_tuple = NpyAvg5mTuple
-    # model = Avg5m
-    
-    def __init__(self):
-        super().__init__(n_primary_keys=2, row_tuple=self.row_tuple)
-
-
-class NpyRealtimeRow(RealtimeRow):
-    name = 'npy_realtime'
-    row_tuple = NpyRealtimeTuple
-    
-    def __init__(self):
-        super().__init__(n_primary_keys=3, row_tuple=self.row_tuple)
-
-
-class NpyWikiRow(WikiRow):
-    name = 'npy_wiki'
-    row_tuple = NpyWikiTuple
-    
-    def __init__(self):
-        super().__init__(n_primary_keys=2, row_tuple=self.row_tuple)
-
-
-def get_row_template(table_name: str):
-    """ Given a `table_name`, return the corresponding Row template class """
-    return {
-        'item': ItemRow,
-        'itemdb': ItemRow,
-        'transaction': TransactionRow,
-        'avg5m': Avg5mRow,
-        'realtime': RealtimeRow,
-        'wiki': WikiRow,
-        'npy_avg5m': NpyAvg5mRow,
-        'npy_realtime': NpyRealtimeRow,
-        'npy_wiki': NpyWikiRow,
-        'npyarray': NpyTable
-    }.get(table_name)
-
-
-
-class NpyTable(Row):
-    """"""
-    row_tuple = NpyDatapoint
-    name = row_tuple.__name__[:-5].lower()
-    column_list = row_tuple.__match_args__
-    db_file = gp.f_db_timeseries
-    model = None
-    
-    
-    def __init__(self):
-        super().__init__(row_tuple=self.row_tuple)
-        _t = int(time.time())
-        self.t1 = _t - _t % 14400
-        self.t0, self.t1 = _t - _t % 86400 - cfg.np_ar_cfg_total_timespan_d * 86400, _t - _t % 14400
-        self.min_t = self.t0 - 86400 * 7
-        self.max_ts_by_item = f"""SELECT MAX(timestamp) FROM "{self.name}" WHERE item_id=?"""
-        print(self.column_list)
-    
-    @staticmethod
-    def remove_expired_rows(self):
-        """ Remove the rows from the database with a timestamp smaller than the lower bound """
-        con = sqlite3.connect(self.db_file)
-        con.row_factory = factories.factory_single_value
-        
-        _del = tuple(frozenset(con.execute("SELECT DISTINCT item_id FROM npyarray").fetchall()).difference(npy_items))
-        
-        if len(_del) > 0:
-            print(f'Removing rows with item_id in {_del}')
-            con.execute(f"""DELETE FROM "{self.name}" WHERE item_id IN {str(_del)[1:-1]}""")
-        con.execute(f"""DELETE FROM "{self.name}" WHERE timestamp < ?""", (self.min_t,))
-        con.commit()
-        con.close()
-    
-    def add_new_rows(self):
-        """ Extend the table with entries for each item_id in the item_id list. If the item_id was previously unlogged,
-         create a full timespan from min_ts to t1, else, only add rows spanning from MAX(timestamp) to t1."""
-        ts_con = sqlite3.connect(database=f'file:{self.db_file}?mode=ro', uri=True)
-        ts_con.row_factory = factories.factory_single_value
-        sql = f"""INSERT INTO "{self.name}"(item_id, timestamp, is_buy, price) SELECT item_id, timestamp, is_buy, """\
-                                        """price FROM realtime WHERE """
-        for item_id in npy_items:
-            try:
-                # Extend array
-                cur_t1 = ts_con.execute(self.max_ts_by_item, (item_id,)).fetchall()[0] + 300
-            except IndexError:
-                # Reset / construct array
-                cur_t1 = self.t0
-        ts_con.row_factory = factories.factory_tuple
-        for ts in range(cur_t1, self.t1, 300):
-            ...
-        
-        
-    
-    @staticmethod
-    def extend_array(npy_ar: np.ndarray, new_rows: np.ndarray):
-        """ Extend npy_array npy_ar with rows `new_rows` """
-        if npy_ar.shape[1] == new_rows.shape[1]:
-            return np.append(npy_ar, new_rows, 0)
-        else:
-            raise ValueError("Mismatch between n_columns of `npy_ar` and `new_rows`")
-    
-    def create_table(self):
-        sql = f"""CREATE TABLE IF NOT EXISTS "{self.name}"("timestamp"   """
-        con = sqlite3.connect(self.db_file)
-        con.execute(sql)
-        con.commit()
-        con.close()
-
-def verify_rows():
-    """
-    Check if the hard-coded column lists are identical to the columns extracted from used sqlite dbs.
-    Raise a ValueError if this is not the case
-    """
-    
-    for _db in (f_db_timeseries, f_db_local):
-        if not os.path.exists(_db):
-            raise FileNotFoundError(f"Database file {_db} does not exist. It can be created via setup.database")
-        _tables = get_tables(get_db_contents(sqlite3.connect(database=f'file:{_db}?mode=ro', uri=True),
-                                             get_indices=False)[0])
-        for key, table_list in _tables.items():
-            # if tuple(row_prefix.get(key) + table_list) != tuple(row_classes.get(key).columns):
-            if tuple(table_list) != get_row_template(key).column_list:
-                print(f'\n\n\n *** Mismatch between parsed and hard-coded column lists! ***\n'
-                      f'To fix this, set the `{get_row_template(key)}.column_list={table_list}`')
-                raise ValueError(f"Mismatch between columns of {key};",
-                                 tuple(table_list), tuple(get_row_template(key).column_list))
-    return True
-
-
-# verify_rows()
+    def to_csv(self, path: str = None):
+        """ Convert this Table to a csv file and save it """
+        if path is None:
+            path = gp.dir_resources + ('loc_' if self.name in var.tables_local else 'ts_') + self.name + '_table.csv'
+        print(self.columns.items())
+        csv_table = {c: var.get_dtype(c).df for c in self.column_list}
+        print([self.columns.get(c).__dict__ for c in list(self.columns.keys()) if self.columns.get(c) is not None])
+        dts = {}
+        result = []
+        keys = None
+        for el in [self.columns.get(c).__dict__ for c in list(self.columns.keys()) if self.columns.get(c) is not None]:
+            # el['column'] = el.get('name')
+            # del el['name']
+            el['dtype'] = str(el.get('dtype').py).split("'")[1]
+            result.append(el)
+            keys = list(el.keys())
+        # exit(123)
+        print(keys)
+        pd.DataFrame(result).astype({c: dt for c, dt in zip(keys, ['string', 'string', 'UInt8', 'UInt8', 'UInt8'])}).to_csv(path, index=False)
+        print(f'Saved .csv file at {path}')

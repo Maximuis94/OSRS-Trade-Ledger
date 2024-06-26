@@ -44,144 +44,17 @@ controller.timeseries
 import shutil
 import sqlite3
 import warnings
-from collections.abc import Sequence, Iterable, Container, Collection
+from collections.abc import Container, Collection
 from typing import Any
 
-import pandas as pd
 from overrides import override
 
 import global_variables.data_classes
-import global_variables.path as gp
 import sqlite.row_factories as factories
 import util.verify as verify
-from model.table import Row, get_row_template, Column
-from sqlite.executable_statements import where_clause
+from model.table import Column, Table
 from util.data_structures import *
 from util.sql import *
-
-
-class Table(Row):
-    """
-    Class that represents a table within a sqlite database.
-    """
-    def __init__(self, table_name: str, db_file: str, **kwargs):
-        """
-        
-        Parameters
-        ----------
-        file: str
-            The database file that this table resides in
-        table_name : str
-            The name of this table
-        columns : model.table.Column or Iterable
-            One or more columns to add to this Table
-        foreign_keys : dict or Iterable, optional, None by default
-        """
-        self.db_file = db_file
-        # print(table_name)
-        
-        row_template = get_row_template(table_name=table_name)
-        row_tuple = []
-        if row_template is None:
-            if '_' in table_name:
-                row_template = get_row_template(table_name.split('_')[1])
-                
-            else:
-                column_list = [c.name for c in kwargs.get('columns')]
-                row_tuple = namedtuple(table_name+'Tuple', column_list)
-        if row_template is None:
-            cols = kwargs.get('columns')
-            # print(cols)
-            if cols is not None:
-                if isinstance(cols, dict):
-                    cols = tuple(cols.keys())
-                elif isinstance(cols, Iterable) and isinstance(cols[0], Column):
-                    cols = tuple([col.name for col in cols])
-            # print(cols)
-            row_template = namedtuple(table_name, cols)
-        try:
-            super().__init__(table_name=table_name, row_tuple=row_template if row_template is not None else row_tuple, db_file=db_file, **kwargs)
-        except AttributeError:
-            super().__init__(table_name=table_name, row_tuple=row_tuple, db_file=db_file, **kwargs)
-
-        # self.__dict__.update(row_template.__dict__)
-        
-        # for k, v in self.__dict__.items():
-        #     print(k, v)
-        # exit(123)
-        
-    def insert_row(self, row: tuple, c: (sqlite3.Connection, sqlite3.Cursor) = None, replace: bool = True):
-        """ Insert values of `row` into this table """
-        if c is None:
-            if self.db_file is None or not os.path.exists(self.db_file):
-                raise FileNotFoundError(f'No db file was configured for table {self.name}, not was a connection passed')
-            c = sqlite3.connect(self.db_file)
-            self.insert_row(row=row, c=c, replace=replace)
-            c.commit()
-            c.close()
-        else:
-            c.execute(self.sql_insert(replace=replace, row=row), row)
-    
-    def sql_update_rows(self, c: sqlite3.Cursor or sqlite3.Connection, columns, values, suffix):
-        ...
-        raise NotImplementedError
-        
-    def modify_table(self, columns: Column or Iterable, **kwargs):
-        """ Add Column(s) `columns` to this Table and re-assess sql statements, primary keys and such """
-        if isinstance(columns, Column):
-            columns = [columns]
-        for col in columns:
-            if len(col) < 2:
-                continue
-            if isinstance(col, Column):
-                self.columns[col.name] = col
-            else:
-                self.columns[col] = Column(col)
-        self.primary_keys = tuple([col.name for _, col in self.columns.items() if col.is_primary_key])
-    
-    def insert_rows(self, rows: Iterable, con: sqlite3.Connection, replace: bool = True):
-        """ Insert `row` into this database table through `con` by executing `sql` """
-        sql = self.insert_replace_dict if replace else self.insert_dict
-        for row in rows:
-            con.execute(sql, row)
-    
-    def as_df(self) -> pd.DataFrame:
-        """ Return this table as an empty dataframe with the same columns and appropriate dtypes """
-        return pd.DataFrame().astype(dtype={c: var.get_dtype(c).df for c in list(self.columns.keys())})
-    
-    def select_(self, where: (str or Iterable), parameters: list = None, order_by: str = None) -> str:
-        """ Return an executable SELECT statement using the WHERE clause. Verify result if parameters are passed """
-        sql = self.select
-        if parameters is None:
-            sql += f" {where if isinstance(where, str) else where_clause(conditions=where)}"
-        else:
-            # Verify resulting where_clause before returning it. Note that this significantly increases runtime.
-            where = where_clause(conditions=where)
-            sql += f" {where}"
-        if order_by is not None:
-            sql += f" {order_by}"
-        return sql
-
-    def to_csv(self, path: str = None):
-        """ Convert this Table to a csv file and save it """
-        if path is None:
-            path = gp.dir_resources + ('loc_' if self.name in var.tables_local else 'ts_') + self.name + '_table.csv'
-        print(self.columns.items())
-        csv_table = {c: var.get_dtype(c).df for c in self.column_list}
-        print([self.columns.get(c).__dict__ for c in list(self.columns.keys()) if self.columns.get(c) is not None])
-        dts = {}
-        result = []
-        keys = None
-        for el in [self.columns.get(c).__dict__ for c in list(self.columns.keys()) if self.columns.get(c) is not None]:
-            # el['column'] = el.get('name')
-            # del el['name']
-            el['dtype'] = str(el.get('dtype').py).split("'")[1]
-            result.append(el)
-            keys = list(el.keys())
-        # exit(123)
-        print(keys)
-        pd.DataFrame(result).astype({c: dt for c, dt in zip(keys, ['string', 'string', 'UInt8', 'UInt8', 'UInt8'])}).to_csv(path, index=False)
-        print(f'Saved .csv file at {path}')
 
 
 class Database(sqlite3.Connection):
@@ -195,7 +68,7 @@ class Database(sqlite3.Connection):
     database, e.g. count_rows, get_min/get_max
     """
     def __init__(self, path: str, tables: Table or Iterable = None, row_factory: Callable = dict_factory,
-                 parse_tables: bool = True, read_only: bool = False, **kwargs):
+                 parse_tables: bool = None, read_only: bool = True, **kwargs):
         # Open db in read-only mode
         self.db_path = path
         self.database_arg = f"file:{path}?mode=ro" if read_only else path
@@ -203,7 +76,7 @@ class Database(sqlite3.Connection):
         self.row_factory = row_factory
         self.tables, self.cursors = {}, {}
 
-        self.default_factory = lambda c, row: row
+        self.default_factory = row_factory
         for key in (0, tuple, dict):
             self.add_cursor(key)
         
@@ -213,9 +86,9 @@ class Database(sqlite3.Connection):
         for el in self.sqlite_master:
             # print(el)
             ...
-        if parse_tables:
+        if parse_tables or parse_tables is None:
             # print(self.db_path)
-            self.extract_tables()
+            self.extract_tables(parse_full=isinstance(parse_tables, bool))
         
         if isinstance(tables, Table):
             self.tables[tables.name] = tables
@@ -279,63 +152,11 @@ class Database(sqlite3.Connection):
             else:
                 print('Parameters:', ())
             raise e
-        
-    def execute_select(self, table: str, n_rows: int = None, **kwargs) -> List[any] or any:
-        """
-        Execute a select statement, chosen based on input args.
-        
-        Parameters
-        ----------
-        table : str
-            The name of the table the SELECT should be executed on
-        n_rows: int, optional, None by default
-            If set, limit the amount of resulting rows to `n_rows` rows. If it is equal to 1, return as a single element
-            
-        Other Parameters
-        ----------------
-        item_id: int, optional, None by default
-            The item_id for the resulting selected rows.
-        t0: int, optional, None by default
-            Lower bound timestamp value. Does not apply to item table queries.
-        t1: int, optional, None by default
-            Upper bound timestamp value. Does not apply to item table queries.
-        group_by: str, optional, None by default
-            If set, group the results by this column
-        order_by: str, optional, None by default
-            If set, order the results by this column.
-        offset: int, optional, 0 by default
-            If set, skip the first `offset` rows of the query result. Only has an effect if `n_rows` is not None
-        row_factory: Callable, optional, None by default
-            If set, use `row_factory` as row_factory instead of the labelled tuple factory.
-        
-        
-        Returns
-        -------
-        List[tuple]
-            If n_rows is None or >1, return a list of labeled tuples
-        tuple
-            if n_rows is 1, return as a labelled tuple
-
-        """
-        if kwargs.get('action') is None:
-            c = self.execute(*self.tables.get(table).sql_select(**kwargs, n_rows=n_rows),
-                             factory=self.tables.get(table).row_tuple)
-        elif kwargs.get('action') == 'count':
-            c = self.execute(*self.tables.get(table).sql_count_rows(**kwargs, n_rows=n_rows),
-                             factory=dict)
-        n_rows = kwargs.get('n_rows')
-        if n_rows is None or n_rows > 1:
-            return c.fetchall()
-        elif n_rows == 1:
-            return c.fetchone()
-        else:
-            raise ValueError(f"Unable to process query with `n_rows`={n_rows}")
-        
-    def execute_insert(self, table: str, **kwargs):
-        return self.execute(*self.tables.get(table).sql_insert(**kwargs))
     
     def con_exe_com(self, sql: str, parameters: Iterable = (), execute_many: bool = False):
-        """ Establish a writeable connection, execute `sql` with parameters `parameters`, commit and close.
+        """
+        Establish a writeable connection, execute `sql` with parameters `parameters`, commit and close. Can be used to
+        submit something to a Database that is loaded as read-only
         
         Parameters
         ----------
@@ -347,19 +168,13 @@ class Database(sqlite3.Connection):
             If True, invoke sqlite3.Connection.execute_many() instead of *.execute()
 
         """
-        _con = sqlite3.connect(self.db_path)
+        _con = self.write_con()
         try:
-            # Only execute_many if explicitly stated to do so rather than attempting to do both
             if execute_many:
                 _con.executemany(sql, parameters)
             else:
                 _con.execute(sql, parameters)
         except sqlite3.ProgrammingError as e:
-            # if execute_many:
-            #     _con.executemany(sql, parameters)
-            # else:
-            #     raise sqlite3.ProgrammingError(f'{e}\nDid not attempt sqlite3.Connection.executemany() as the '
-            #                                    f'`allow_exe_many` parameter was disabled')
             raise sqlite3.ProgrammingError(e)
         _con.commit()
         _con.close()
@@ -444,48 +259,49 @@ class Database(sqlite3.Connection):
         c.row_factory = rf
         self.cursors[key] = c
     
-    def extract_tables(self, table_filter: str or Container = None):
+    def extract_tables(self, table_filter: str or Container = None, parse_full: bool = True):
         """ Generate Table and Column objects from the database by parsing its CREATE statements """
         self.row_factory, add_all = dict_factory, False
-        parse_all = table_filter is None
         if isinstance(table_filter, str):
             table_filter = [table_filter]
         
         self.sql_tables, self.sql_indices = get_db_contents(c=self.cursor())
-        for el in self.sqlite_master:
-            if el.type != 'table':
+        
+        parse_full = parse_full and table_filter is None
+        
+        # Used to be able to auto-parse databases with a large amount of tables that are more or less the same
+        parse_one = not parse_full and len(self.sqlite_master) > 10 and table_filter is None
+        
+        for _table in self.sqlite_master:
+            if _table.type != 'table':
                 continue
             columns = []
-            if not parse_all and el.name not in table_filter:
+            
+            if not parse_full and _table.name not in table_filter:
                 continue
-                    
-            # print(el.name, t)
-            sqlite = el.sql
-            # print(el.name)
-            for column in self.execute(f"PRAGMA table_info('{el.name}')").fetchall():
+                
+            for column in self.execute(f"PRAGMA table_info('{_table.name}')").fetchall():
                 if len(column) < 2:
                     continue
-                name = column.get('name')
                 column['is_nullable'] = bool(abs(int(column.get('notnull'))-1))
                 column['is_primary_key'] = column.get('pk') > 0
-                column_sql = sqlite.split(f'"{name}"')[-1].split(',')[0]
-                # print(column_sql)
-                if 'CHECK (' in column_sql:
-                    check = column_sql.split('CHECK (')[-1].split(')')[0]
-                else:
-                    check = None
                 columns.append(Column(
                     name=column.get('name'),
                     is_nullable=bool(abs(int(column.get('notnull'))-1)),
                     is_primary_key=column.get('pk') > 0
                 ))
-                # print(columns[-1].create())
-            table = Table(table_name=el.name, columns=columns, foreign_keys=[], db_file=self.db_path)
-            self.add_table(table)
-            if el.name == 'npyarray':
-                # print(self.db_path)
-                raise ''
-                # exit(1)
+            if parse_one:
+                s = ''
+                for _char in table.name:
+                    if not _char.isdigit():
+                        s += _char
+                    else:
+                        s += '_'
+                _table.name = s
+            self.tables[_table.name] = Table(table_name=_table.name, columns=columns, foreign_keys=[],
+                                             db_file=self.db_path)
+            if parse_one:
+                return
     
     def as_df(self, table_name: str) -> pd.DataFrame:
         """ Convert table `table_name` to a pandas DataFrame and return it """
@@ -517,33 +333,6 @@ class Database(sqlite3.Connection):
         con.commit()
         con.close()
         return failed
-    
-    def validate_rows(self, rows: Iterable, table: str):
-        """ Validate each row in `rows` iteratively, using validation configurations from `table` """
-        return self.tables.get(table).validate_rows(rows)
-    
-    def configure_validation_settings(self, table: str or Table, enable_validation: bool = None,
-                                      columns: Sequence or None = ()) -> Table:
-        """
-        Modify validation configs for `table_name`
-        
-        Parameters
-        ----------
-        table : str
-            The name of the table for which the validation settings should be altered
-        enable_validation : bool, optional, None by default
-            If passed, this flag dictates whether row validation should be enabled or disabled
-        columns : Sequence or None, optional, () by default
-            If passed as None, validate rows by including all columns, if passed as Iterable, restrict validation to
-            these columns.
-
-        """
-        if isinstance(table, str):
-            table = self.tables.get(table)
-        table.set_validation_config(columns=columns, enable_validation=enable_validation)
-        self.tables[table.name] = table
-        # print(self.tables.get('transactions').__dict__)
-        return table
     
     def get_table_by_columns(self, columns: Collection[str]) -> Table:
         """ Given Collection `columns`, return the table with exactly these columns, if present. If no table could be
@@ -584,6 +373,7 @@ class Database(sqlite3.Connection):
         bool
             True if the DataFrame was submitted to the database, False if not.
         """
+        raise NotImplementedError("Added @ 26-06")
         if columns is None:
             columns = list(df.columns)
         else:
@@ -710,35 +500,7 @@ class Database(sqlite3.Connection):
             print('Database VACUUM was not completed successfully...')
             os.remove(temp_file)
         return identical
-        
 
-RbpiDb = namedtuple('RbpiDb', ['path', 'table'])
-
-rbpi_dbs = {
-    'avg5m': RbpiDb(gp.f_rbpi_db_avg5m, 'avg5m'),
-    'realtime': RbpiDb(gp.f_rbpi_db_realtime, 'realtime'),
-    'wiki': RbpiDb(gp.f_rbpi_db_wiki, 'wiki'),
-    'item': RbpiDb(gp.f_rbpi_db_item, 'itemdb')
-}
 
 if __name__ == '__main__':
-    db = Database(gp.f_db_npy, read_only=True)
-    for k, v in db.tables.get('item00002').columns.items():
-        print(k, v.__dict__)
-    print(db.tables.get('item00002').create_table)
-    exit(1)
-    
-    
-    for table in tuple(db.tables.keys()):
-        for row in db.execute(f"SELECT * FROM {table}", factory=dict):
-            b, s = row.get('buy_price'), row.get('sell_price')
-            if b is not None and b>0 and s is not None and s>0:
-                row['avg5m_price'] = (b+s)/2
-            if b is not None and b>0:
-                row['avg5m_price'] = b
-            elif s is not None and s>0:
-                row['avg5m_price'] = s
-            else:
-                row['avg5m_price'] = 0
-            row['avg5m_value'] = row.get('avg5m_price') * row.get('avg5m_volume')
-            db.execute(f'INSERT OR REPLACE INTO {table}')
+    ...
