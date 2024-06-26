@@ -361,71 +361,62 @@ def submit_transaction_queue(queue_file: str = gp.f_exchange_log_queue, submit_d
     
     update_ts = int(time.time())
     q = pd.DataFrame(gp.load_data(queue_file))
-    
-    q['item_id'] = q['item_id'].apply(lambda r: r if not isinstance(r, Item) else r.item_id)
-    n = len(q)
-    q = q.sort_values(by=['timestamp', 'item_id', 'is_buy'], ascending=[True, True, False]).drop_duplicates()
-    if n != len(q):
-        print(f"{n - len(q)}/{n} duplicate entries have been removed from the queue")
-    
-    con = sqlite3.connect(gp.f_db_local)
-    c = con.cursor()
-    t_id = c.execute("""SELECT MAX(transaction_id) FROM 'transaction' """).fetchone()[0]
-    sql_exe = "INSERT INTO 'transaction'(transaction_id, item_id, timestamp, is_buy, quantity, price, " \
-              "status, tag, update_ts) VALUES(:transaction_id, :item_id, :timestamp, :is_buy, " \
-              ":quantity, :price, :status, :tag, :update_ts)"
-    
-    q = q.to_dict('records')
-    submitted, queue, queue_vars = [], [], list(q[0].keys())
-    for t in q:
-        if isinstance(min_ts, int) and t.get('timestamp') < min_ts:
-            print(f'Skipped {t}')
-            continue
-        t_id += 1
+    submitted = []
+    if len(q) > 0:
+        q['item_id'] = q['item_id'].apply(lambda r: r if isinstance(r, int) else r.item_id)
+        n = len(q)
+        q = q.sort_values(by=['timestamp', 'item_id', 'is_buy'], ascending=[True, True, False]).drop_duplicates()
+        if n != len(q):
+            print(f"{n - len(q)}/{n} duplicate entries have been removed from the queue")
         
-        # TODO add method to convert parsed line to Transaction
-        t = Transaction(transaction_id=get_next_transaction_id(),
-                        item_id=t.get('item_id'),
-                        timestamp=t.get('timestamp'),
-                        is_buy=t.get('is_buy'),
-                        quantity=t.get('quantity'),
-                        price=t.get('price'),
-                        status=1,
-                        tag='e',
-                        update_ts=update_ts)
-        t.item_id, t.price, t.quantity = remap_item(item=create_item(item_id=t.item_id), price=t.price, quantity=t.quantity)
-        t.transaction_id = t_id
-        try:
-            if isinstance(t.item_id, Item):
-                t.item = create_item(t.item_id.item_id)
-                t.item_id = t.item.item_id
-            c.execute(sql_exe, t.__dict__)
-            # t = l.submit_transaction(t.__dict__, commit_transaction=False, con=con, update_ts=update_ts)
-            submitted.append(t)
-        # TODO: think of and implement relevant exceptions
-        except OSError:
-            # Something went wrong; add the entry to queue.
-            print(f'\t*** Failed to submit {t if isinstance(t, dict) else t.__dict__} ***')
-            queue.append({k: t.__dict__.get(k) for k in queue_vars})
-    
-    # Done; commit sqlite database and overwrite the queue file.
-    if submit_data:
-        con.commit()
-        con.close()
-        uf.save(data=queue, path=queue_file)
+        con = sqlite3.connect(gp.f_db_local)
+        c = con.cursor()
+        t_id = c.execute("""SELECT MAX(transaction_id) FROM 'transaction' """).fetchone()[0]
+        sql_exe = "INSERT INTO 'transaction'(transaction_id, item_id, timestamp, is_buy, quantity, price, " \
+                  "status, tag, update_ts) VALUES(:transaction_id, :item_id, :timestamp, :is_buy, " \
+                  ":quantity, :price, :status, :tag, :update_ts)"
         
-        try:
-            backup_db = time.time() - os.path.getmtime(uf.get_newest_file(gp.dir_backup_localdb)) > cfg.localdb_backup_cooldown
-        except ValueError:
-            backup_db = True
+        q = q.to_dict('records')
+        queue, queue_vars = [], list(q[0].keys())
+        for t in q:
+            if isinstance(min_ts, int) and t.get('timestamp') < min_ts:
+                print(f'Skipped {t}')
+                continue
+            t_id += 1
             
-        if backup_db:
-            shutil.copy2(gp.f_db_local, gp.dir_backup_localdb+f'localdb_{int(time.time())}.db')
-            
-            # Max backups exceeded -> Remove oldest backup
-            while len(uf.get_files(gp.dir_backup_localdb)) > max(3, cfg.max_localdb_backups):
-                print(f'Removing backup {uf.get_oldest_file(uf.get_files(gp.dir_backup_localdb))}...')
-                os.remove(uf.get_oldest_file(uf.get_files(gp.dir_backup_localdb)))
+            # TODO add method to convert parsed line to Transaction
+            t = Transaction(transaction_id=get_next_transaction_id(),
+                            item_id=t.get('item_id'),
+                            timestamp=t.get('timestamp'),
+                            is_buy=t.get('is_buy'),
+                            quantity=t.get('quantity'),
+                            price=t.get('price'),
+                            status=1,
+                            tag='e',
+                            update_ts=update_ts)
+            t.item_id, t.price, t.quantity = remap_item(item=create_item(item_id=t.item_id), price=t.price, quantity=t.quantity)
+            t.transaction_id = t_id
+            try:
+                if isinstance(t.item_id, Item):
+                    t.item = create_item(t.item_id.item_id)
+                    t.item_id = t.item.item_id
+                c.execute(sql_exe, t.__dict__)
+                # t = l.submit_transaction(t.__dict__, commit_transaction=False, con=con, update_ts=update_ts)
+                submitted.append(t)
+            # TODO: think of and implement relevant exceptions
+            except OSError:
+                # Something went wrong; add the entry to queue.
+                print(f'\t*** Failed to submit {t if isinstance(t, dict) else t.__dict__} ***')
+                queue.append({k: t.__dict__.get(k) for k in queue_vars})
+    
+        # Done; commit sqlite database and overwrite the queue file.
+        if submit_data:
+            con.commit()
+            con.close()
+            uf.save(data=queue, path=queue_file)
+
+    uf.backup_localdb(db_path=gp.f_db_local, backup_dir=gp.dir_backup_localdb,
+                      min_cooldown=cfg.localdb_backup_cooldown, max_backups=cfg.max_localdb_backups)
         
     # Export submissions to a readable csv file
     try:
@@ -569,6 +560,7 @@ def parse_transaction_thread_call():
 def parse_logs_background():
     if not process_logs(add_current=False):
         exit(1)
+        ...
     submit_transaction_queue(submit_data=True)
     update_submitted_lines()
     

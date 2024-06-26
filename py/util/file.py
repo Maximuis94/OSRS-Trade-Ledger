@@ -152,6 +152,7 @@ def save(data, path: str, overwrite: bool = True, exception_handler: callable = 
             raise WindowsError(f"Error while attempting to saving data of type {type(data)} at {path}")
 
 
+
 def get_files(src: str, ext: (str or Container) = None, full_path: bool = True, add_folders: bool = False) -> List[str]:
     """
     Fetch the contents of `src_folder` and return the subset of files that meets the specified requirements as a list
@@ -289,10 +290,31 @@ def verify_timeseries_batch_file(item_id: int, batch_root: str, srcs: Iterable):
                 os.remove(get_timeseries_batch_path(item_id, batch_root, src))
             except FileNotFoundError:
                 ...
+
+
+def backup_localdb(db_path, backup_dir, min_cooldown: int, max_backups: int):
+    import time
+    try:
+        files = get_files(backup_dir)
+        if len(files) == 0:
+            backup_db = True
+        else:
+            backup_db = time.time() - os.path.getmtime(get_newest_file(files, use_last_modified=False)) > min_cooldown
+    except ValueError:
+        backup_db = True
     
+    if backup_db:
+        import shutil
+        shutil.copy2(db_path, backup_dir + f'localdb_{int(time.time())}.db')
+        
+        # Max backups exceeded -> Remove oldest backup
+        while len(get_files(backup_dir)) > max(3, max_backups):
+            files = get_files(backup_dir)
+            print(f'Removing backup {get_oldest_file(files)}...')
+            os.remove(get_oldest_file(files))
 
 
 if __name__ == '__main__':
     ...
-    
+    print(load(r'C:\Users\Max Moons\Documents\GitHub\OSRS-Trade-Ledger\py\data\test.npy'))
     
