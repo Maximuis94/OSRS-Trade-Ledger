@@ -25,13 +25,12 @@ import sqlite.row_factories
 import util.file as uf
 import util.str_formats as fmt
 from controller.item import ItemController, Item
-from global_variables.data_classes import TimeseriesRow
-from model.database import rbpi_dbs, Database
+from global_variables.data_classes import TimeseriesRow, rbpi_dbs
+from model.database import Database
 from util.data_structures import datapoint
 
 # This is the order in which src id values are assigned when creating primary keys.
 src_ids = '', 'a', 'w', 'r'
-db_update_frequency = cfg.timeseries_data_update_frequency
 
 
 _t_commit = int(time.perf_counter() + cfg.data_transfer_commit_frequency)
@@ -149,7 +148,6 @@ def parse_batch(batch_path: str, out_file: str = None, dir_out: str = None) -> L
 
 def insert_batch(db: Database, batch_path: str, skip_ids: list = (9044, 9050, 26247, 2660), remove_src: bool = False):
     """ Insert the batch located at `batch_path` into Database `db` """
-    rows = []
     n_per_src = [0, 0, 0, 0, 0]
     
     for row in parse_batch(batch_path):
@@ -245,7 +243,6 @@ def parse_tables(db_to: sqlite3.Connection, db_dict: dict = rbpi_dbs, t0: int = 
     """ Parse avg5m, realtime and wiki data from rbpi sqlite tables and transfer it. """
     t_ = time.perf_counter()
     t1 = int(time.time() - time.time() % 3600)
-    parameters = {'t1': int(time.time() - time.time() % 3600)}
     _types = {col: var.types.get(col) for col in ['item_id']+list(var.avg5m_columns)+list(var.realtime_columns)+list(var.wiki_columns)}
     # print(_types)
     global ts_threshold
@@ -346,7 +343,7 @@ def timeseries_transfer(path: str = gp.f_db_timeseries):
 ##############################################################################################
 
 
-def parse_item_data(path: str, table: str) -> dict:
+def parse_item_data(path: str) -> dict:
     """
     Parse item meta-data from `db_from` and return it as a list of dicts. Remo
     
@@ -354,8 +351,6 @@ def parse_item_data(path: str, table: str) -> dict:
     ----------
     path : str
         Path to database file
-    table : str
-        Name of table in database
 
     Returns
     -------
@@ -383,7 +378,7 @@ def insert_items():
     src_db = rbpi_dbs.get('item')
     idb = ItemController(path=src_db.path, table_name=src_db.table, augment_items=False)
     rows = []
-    for item_id, data in parse_item_data(path=src_db.path, table=src_db.table).items():
+    for item_id, data in parse_item_data(path=src_db.path).items():
         i = idb.get_item(item_id)
         if i is None:
             continue

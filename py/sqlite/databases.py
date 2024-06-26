@@ -6,9 +6,7 @@ The databases as they are defined here should correspond with the column orderin
 """
 
 from global_variables.path import f_db_local, f_db_timeseries
-from model.database import Table
-from model.table import Column
-
+from model.table import Column, Table
 
 avg5m = Table(table_name='avg5m', db_file=f_db_timeseries,
               columns=[

@@ -4,38 +4,22 @@ This module contains various methods for analyzing data for a specific item
 TODO methods have not yet been redesigned for new db structure
 """
 import sqlite3
-import time
 
 import numpy as np
 import pandas as pd
 
 from global_variables.importer import *
 from model.item import Item
-import controller.item as item
 
 
-def check_target_prices(i: Item, t0: int or float, t1: int or float, min_n: float = 1.0, **kwargs) -> (float, float):
+def check_target_prices() -> (float, float):
     """
     Check how often the price of Item `i` has exceeded the configured target prices for this item in unix timestamp
     interval `t0`, `t1`. Override a configured target price if it is passed.
     # TODO refine method -> check neighbouring datapoints for missing price data?
     # TODO move to data_analysis?
     
-    Parameters
-    ----------
-    i : Item
-        The Item for which the target prices / timeseries data is to be evaluated
-    t0: int or float
-        The lower bound of the timestamp interval the prices are to be checked for
-    t1: int or float
-        The upper bound of the timestamp interval the prices are to be checked for
-    target_buy: int, optional, None by default
-        If passed, override the database target buy price with this value
-    target_sell: int, optional, None by default
-        If passed, override the database target sell price with this value
-    min_n: float, optional, 1.0 by default
-        The minimum value for n, which is the amount of non-zero prices found within the interval. See Notes for a more
-        detailed explanation.
+    
     
 
     Returns
@@ -65,71 +49,11 @@ def check_target_prices(i: Item, t0: int or float, t1: int or float, min_n: floa
     
     
     """
-    target_buy = i.target_buy if kwargs.get('target_buy') is None else kwargs.get('target_buy')
-    target_sell = i.target_sell if kwargs.get('target_sell') is None else kwargs.get('target_sell')
-    
-    if not target_buy > 0 and not target_sell > 0:
-        raise ValueError('Unable to assess whether target prices have been exceeded if they are not defined...')
-    
-    sell, buy = [], []
-    n = 0
-    # data = avg5m.load_as_np(item_id=i.item_id, t0=target_prices_eval_t0, t1=eval_t1)
-    data = avg5m.load_as_np(item_id=i.item_id, t0=t0, t1=t1)
-    # avg5m = timeseries.Avg5m()
-    timestamps, prices = np.append(data.timestamp, data.timestamp), np.append(data.buy_price, data.sell_price)
-    buy_prices, sell_prices = {}, {}
-    
-    n = 0
-    n = len(data.timestamp)
-    for ts, buy, sell in zip(data.timestamp, data.buy_price, data.sell_price):
-        bp, sp = min(buy, sell), max(buy, sell)
-        if bp == 0:
-            bp = sp
-        s = None
-        if bp < target_buy:
-            buy_prices[ts] = bp
-            s = f'buy: {bp} ({target_buy})  '
-        if sp > target_sell:
-            sell_prices[ts] = sp
-            s = f'sell: {sp} ({target_sell})  ' if s is None else s + f'sell: {sp} ({target_sell})  '
-        if s is not None:
-            print(f'[{ut.loc_unix_dt(ts)}]  {s}')
-    sell, buy = len(sell_prices.keys()), len(buy_prices.keys())
-    print(len(list(buy_prices.keys())), len(list(sell_prices.keys())))
-
-    # for ts in data.timestamp:
-    #     bp, sp = buy_prices.get(ts), sell_prices.get(ts)
-    #     if bp is not None or sp is not None:
-    #         s = f'{ut.loc_unix_dt(ts)}: '
-    #         if bp is not None:
-    #             s += f'buy: {bp} ({target_buy})  '
-    #         if sp is not None:
-    #             s += f'sell: {sp} ({target_sell})  '
-    #         print(s[:-2])
-    print(f'n_buy: {buy}/{n} / n_sell: {sell}/{n}')# | n_missing: {n_missing}/{n_total} ({n_missing/n_total*100:.1f}%)')
-    return round(buy/n, 4), round(sell/n, 4)
-    
-    nonzero_prices, min_n, n_total = np.nonzero(prices > 0), int(min_n * len(timestamps)), len(prices)
-    
-    prices, timestamps = prices[nonzero_prices], timestamps[nonzero_prices]
-    n, n_missing = max(len(prices), min_n), n_total - len(prices)
-    # for ts, p in avg5m.load_as_np(item_id=i.item_id, t0=target_prices_eval_t0, t1=eval_t1):
-    for ts, p in zip(timestamps, prices):
-        if has_target_buy and p <= i.target_buy:
-            buy.append((ts, p))
-        elif has_target_sell and p >= i.target_sell:
-            sell.append((ts, p))
-    
-    for s in sell:
-        print(ut.loc_unix_dt(s[0]), s[1], i.target_sell)
-    
-    for b in buy:
-        print(ut.loc_unix_dt(b[0]), b[1], i.target_buy)
-    
-    print(f'n_buy: {len(buy)}/{n} / n_sell: {len(sell)}/{n} | n_missing: {n_missing}/{n_total} ({n_missing/n_total*100:.1f}%)')
+    # TODO Implement using SQLite
+    raise NotImplementedError
 
 
-def estimate_buy_price(item: NpyArray, n_days: int = 2):
+def estimate_buy_price():
     """
     Estimate buy price by comparing various 4h intervals of the item of the last `n_days` days. The lowest buy prices
     for each 4h interval will be listed
@@ -147,29 +71,21 @@ def estimate_buy_price(item: NpyArray, n_days: int = 2):
         The recommended buy price for the item, given `n_days` worth of data
 
     """
-    # To-do
-    return item.buy_price
+    # TODO
+    raise NotImplementedError
 
 
-def estimate_daily_profit(buy_prices: np.ndarray, sell_prices: np.ndarray, wiki_volume: int = 250000,
-                          gap_interval: tuple = (.2, .8), buy_limit: int = 50000):
+def estimate_daily_profit():
     """
     Estimate daily profit for an item, given its buy and sell prices. Using indices derived with the gap interval, the
     difference between the buy and sell price is multiplied by 20% of the wiki volume OR 6 times the buy_limit,
     whichever is lowest
-    :param buy_prices: np interval with buy_prices
-    :param sell_prices: np interval with sell_prices
-    :param wiki_volume: daily wiki volume for the given item
-    :param gap_interval: tuple of 2 floating point digits indicating which price gap should be computed. The floating
-    point number will be converted to an index, which corresponds to the index equal to x% of the array elements
-    :param buy_limit:
-    :return:
     """
-    # To-do
-    pass
+    # TODO
+    raise NotImplementedError
 
 
-def long_term_trade_analysis(data: NpyArray):
+def long_term_trade_analysis():
     """
     Analyze data for the given item and assess it's viablitity for long-term trading.
     Assessment should be based on;
@@ -178,18 +94,13 @@ def long_term_trade_analysis(data: NpyArray):
     - All-time low+high price
     - Price affected by update -> best ignore?
     - Daily volume
-
-
-
-    :param data:
-    :return:
     """
     
-    # To-do
-    return
+    # TODO
+    raise NotImplementedError
 
 
-def item_dump_analysis(data: NpyItemUpdater):
+def item_dump_analysis():
     """
     Find item dumps in the given array and return them as a list.
     How is an item dump defined?
@@ -212,83 +123,82 @@ def item_dump_analysis(data: NpyItemUpdater):
     - buy limit
 
     Method is designed to analyze a timespan of multiple days/weeks
-
-    :param a:
-    :param columns:
-    :return: A list of timestamps that mark item dumps
     """
-    a, columns, buy_limit = data.ar.copy(), data.column_list, data.buy_limit
-    df = pd.DataFrame(data=a, columns=columns)
-    # print(a)
-    df = df.loc[df['buy_price'] > 0]
-    wiki_price = int(np.average(df['wiki_price'].to_numpy()))
-    wiki_volume = int(np.average(df['wiki_volume'].to_numpy()))
-    roi_threshold = max(1000000, min([wiki_volume / 6, buy_limit]) * wiki_price * .05)
+    # a, columns, buy_limit = data.ar.copy(), data.column_list, data.buy_limit
+    # df = pd.DataFrame(data=a, columns=columns)
+    # # print(a)
+    # df = df.loc[df['buy_price'] > 0]
+    # wiki_price = int(np.average(df['wiki_price'].to_numpy()))
+    # wiki_volume = int(np.average(df['wiki_volume'].to_numpy()))
+    # roi_threshold = max(1000000, min([wiki_volume / 6, buy_limit]) * wiki_price * .05)
+    #
+    # # Rows of interest
+    # roi = df.loc[df['flip_buy'] >= roi_threshold]
+    # # roi = df.loc[df['flip_buy'] >= 1000000]
+    # ratio_roi = len(roi) / len(df)
+    # roi_flip_buy = roi['flip_buy'].to_numpy(dtype=np.uint64)
+    # # print(ratio_roi, len(roi_flip_buy))
+    # if len(roi_flip_buy) >= 10 and ratio_roi > .10:
+    #     roi_flip_buy.sort()
+    #     roi_flip_buy = int(
+    #         np.average(roi_flip_buy[:int(len(roi_flip_buy) * .9)]) * (min(buy_limit, wiki_volume) / buy_limit))
+    # else:
+    #     return
+    # return {'item_id': data.item_id, 'item_name': data.item_name, 'wiki_price': wiki_price, 'wiki_volume': wiki_volume,
+    #         'buy_limit': buy_limit, 'ratio_roi': ratio_roi, 'roi_threshold': roi_threshold, 'avg_rfb': roi_flip_buy}
     
-    # Rows of interest
-    roi = df.loc[df['flip_buy'] >= roi_threshold]
-    # roi = df.loc[df['flip_buy'] >= 1000000]
-    ratio_roi = len(roi) / len(df)
-    roi_flip_buy = roi['flip_buy'].to_numpy(dtype=np.uint64)
-    # print(ratio_roi, len(roi_flip_buy))
-    if len(roi_flip_buy) >= 10 and ratio_roi > .10:
-        roi_flip_buy.sort()
-        roi_flip_buy = int(
-            np.average(roi_flip_buy[:int(len(roi_flip_buy) * .9)]) * (min(buy_limit, wiki_volume) / buy_limit))
-    else:
-        return
-    return {'item_id': data.item_id, 'item_name': data.item_name, 'wiki_price': wiki_price, 'wiki_volume': wiki_volume,
-            'buy_limit': buy_limit, 'ratio_roi': ratio_roi, 'roi_threshold': roi_threshold, 'avg_rfb': roi_flip_buy}
+    # TODO
+    raise NotImplementedError
 
 
-def flip_analysis(data: NpyItemUpdater, day_ids: list = None, min_ts: int = None, max_ts: int = None):
+def flip_analysis():
     """
     Analyze the given data for its potential for flipping. The timespan of the analysis can be altered using n_days,
     although it should be noted that this number should be kept as low as possible to ensure the results are
     interpretable
-    :param data: Loaded NpyItem object
-    :param day_ids: A list with all day_ids that should be included
-    :return:
     """
-    a, columns, buy_limit = data.ar.copy(), data.column_list, data.buy_limit
-    df = pd.DataFrame(data=a, columns=columns)
+    # a, columns, buy_limit = data.ar.copy(), data.column_list, data.buy_limit
+    # df = pd.DataFrame(data=a, columns=columns)
+    #
+    # if isinstance(day_ids, list):
+    #     df = pd.concat([df.loc[df['day_id'] == dat] for dat in day_ids])
+    #     min_ts, max_ts = df['timestamp'].min(), df['timestamp'].max()
+    # elif min_ts is not None and max_ts is not None:
+    #     df = df.loc[(df['timestamp'] >= min_ts) & (df['timestamp'] < max_ts)]
+    # else:
+    #     raise ValueError("Input error in data_analysis.flip_analysis(); a time interval should be specified by passing "
+    #                      "day_ids or by using a minimum and maximum timestamp")
+    #
+    # # print(ts_util.ts_to_dt(df['timestamp'].min(), utc_time=True),
+    # #       ts_util.ts_to_dt(df['timestamp'].max(), utc_time=True))
+    # i1, i2 = .3, .7
+    #
+    # wiki_price = int(np.average(df['wiki_price'].to_numpy()))
+    # wiki_volume = int(np.average(df['wiki_volume'].to_numpy()))
+    #
+    # if wiki_price > 10000000 or wiki_volume * wiki_price < 500000:
+    #     return
+    #
+    # sell_prices, buy_prices = df['sell_price'].to_numpy(), df['buy_price'].to_numpy()
+    # sell_prices, buy_prices = np.sort(sell_prices[sell_prices != 0]), np.sort(buy_prices[buy_prices != 0])
+    # # weighted_price_gap = sp_bp_gap * min(wiki_volume * .2, buy_limit * 6)
+    # try:
+    #     avg_bot20_buy = int(get_sorted_interval_averages(a=buy_prices, intervals=[(0.05, .3)]).get((0.05, .3)))
+    #     avg_top20_sell = int(get_sorted_interval_averages(a=sell_prices, intervals=[(.7, .95)]).get((.7, .95)))
+    # except ValueError:
+    #     return
+    # sp_bp_gap = sell_prices[int(np.ceil(len(sell_prices) * i2))] - buy_prices[int(np.ceil(len(buy_prices) * i1))]
+    #
+    # # Volume coefficient; (very) rough estimate of how many items one can expect to buy throughout the day
+    # vc, vc_4h = min(int(wiki_volume * .2), buy_limit * 6), min(int(wiki_volume * .1), buy_limit)
+    # return {'item_id': data.item_id, 'item_name': data.item_name, 'wiki_price': wiki_price, 'wiki_volume': wiki_volume,
+    #         'buy_limit': buy_limit, 'min_ts': min_ts, 'max_ts': max_ts,
+    #         'flip_est': int(sp_bp_gap * vc_4h), 'avg_bot20': avg_bot20_buy,
+    #         'avg_top20': avg_top20_sell,
+    #         'delta_sell_buy': vc * int(avg_top20_sell - avg_bot20_buy - int(wiki_price * .01))}
     
-    if isinstance(day_ids, list):
-        df = pd.concat([df.loc[df['day_id'] == dat] for dat in day_ids])
-        min_ts, max_ts = df['timestamp'].min(), df['timestamp'].max()
-    elif min_ts is not None and max_ts is not None:
-        df = df.loc[(df['timestamp'] >= min_ts) & (df['timestamp'] < max_ts)]
-    else:
-        raise ValueError("Input error in data_analysis.flip_analysis(); a time interval should be specified by passing "
-                         "day_ids or by using a minimum and maximum timestamp")
-    
-    # print(ts_util.ts_to_dt(df['timestamp'].min(), utc_time=True),
-    #       ts_util.ts_to_dt(df['timestamp'].max(), utc_time=True))
-    i1, i2 = .3, .7
-    
-    wiki_price = int(np.average(df['wiki_price'].to_numpy()))
-    wiki_volume = int(np.average(df['wiki_volume'].to_numpy()))
-    
-    if wiki_price > 10000000 or wiki_volume * wiki_price < 500000:
-        return
-    
-    sell_prices, buy_prices = df['sell_price'].to_numpy(), df['buy_price'].to_numpy()
-    sell_prices, buy_prices = np.sort(sell_prices[sell_prices != 0]), np.sort(buy_prices[buy_prices != 0])
-    # weighted_price_gap = sp_bp_gap * min(wiki_volume * .2, buy_limit * 6)
-    try:
-        avg_bot20_buy = int(get_sorted_interval_averages(a=buy_prices, intervals=[(0.05, .3)]).get((0.05, .3)))
-        avg_top20_sell = int(get_sorted_interval_averages(a=sell_prices, intervals=[(.7, .95)]).get((.7, .95)))
-    except ValueError:
-        return
-    sp_bp_gap = sell_prices[int(np.ceil(len(sell_prices) * i2))] - buy_prices[int(np.ceil(len(buy_prices) * i1))]
-    
-    # Volume coefficient; (very) rough estimate of how many items one can expect to buy throughout the day
-    vc, vc_4h = min(int(wiki_volume * .2), buy_limit * 6), min(int(wiki_volume * .1), buy_limit)
-    return {'item_id': data.item_id, 'item_name': data.item_name, 'wiki_price': wiki_price, 'wiki_volume': wiki_volume,
-            'buy_limit': buy_limit, 'min_ts': min_ts, 'max_ts': max_ts,
-            'flip_est': int(sp_bp_gap * vc_4h), 'avg_bot20': avg_bot20_buy,
-            'avg_top20': avg_top20_sell,
-            'delta_sell_buy': vc * int(avg_top20_sell - avg_bot20_buy - int(wiki_price * .01))}
+    # TODO
+    raise NotImplementedError
 
 
 def get_sorted_interval_averages(a: np.ndarray, intervals: list, remove_zeros: bool = True):
@@ -382,40 +292,40 @@ def check_target_prices(i: Item, t0: int or float, t1: int or float, target_buy:
 
 
     """
-    if target_buy is None:
-        target_buy = i.target_buy
-    if target_sell is None:
-        target_sell = i.target_sell
-    has_target_buy, has_target_sell = target_buy > 0, target_sell > 0
-    if not has_target_buy and not has_target_sell:
-        raise ValueError('Unable to assess whether target prices have been exceeded if they are not defined...')
-    
-    sell, buy = [], []
-    n = 0
+    # if target_buy is None:
+    #     target_buy = i.target_buy
+    # if target_sell is None:
+    #     target_sell = i.target_sell
+    # has_target_buy, has_target_sell = target_buy > 0, target_sell > 0
+    # if not has_target_buy and not has_target_sell:
+    #     raise ValueError('Unable to assess whether target prices have been exceeded if they are not defined...')
+    #
+    # sell, buy = [], []
+    # n = 0
     # data = avg5m.load_as_np(item_id=i.item_id, t0=target_prices_eval_t0, t1=eval_t1)
-    data = avg5m.load_as_np(item_id=i.item_id, t0=t0, t1=t1)
+    # data = avg5m.load_as_np(item_id=i.item_id, t0=t0, t1=t1)
     # avg5m = timeseries.Avg5m()
-    timestamps, prices = np.append(data.timestamp, data.timestamp), np.append(data.buy_price, data.sell_price)
-    buy_prices, sell_prices = {}, {}
-    
-    n = 0
-    n = len(data.timestamp)
-    for ts, buy, sell in zip(data.timestamp, data.buy_price, data.sell_price):
-        bp, sp = min(buy, sell), max(buy, sell)
-        if bp == 0:
-            bp = sp
-        s = None
-        if bp < target_buy:
-            buy_prices[ts] = bp
-            s = f'buy: {bp} ({target_buy})  '
-        if sp > target_sell:
-            sell_prices[ts] = sp
-            s = f'sell: {sp} ({target_sell})  ' if s is None else s + f'sell: {sp} ({target_sell})  '
-        if s is not None:
-            print(f'[{ut.loc_unix_dt(ts)}]  {s}')
-    sell, buy = len(sell_prices.keys()), len(buy_prices.keys())
-    print(len(list(buy_prices.keys())), len(list(sell_prices.keys())))
-    
+    # timestamps, prices = np.append(data.timestamp, data.timestamp), np.append(data.buy_price, data.sell_price)
+    # buy_prices, sell_prices = {}, {}
+    #
+    # n = 0
+    # n = len(data.timestamp)
+    # for ts, buy, sell in zip(data.timestamp, data.buy_price, data.sell_price):
+    #     bp, sp = min(buy, sell), max(buy, sell)
+    #     if bp == 0:
+    #         bp = sp
+    #     s = None
+    #     if bp < target_buy:
+    #         buy_prices[ts] = bp
+    #         s = f'buy: {bp} ({target_buy})  '
+    #     if sp > target_sell:
+    #         sell_prices[ts] = sp
+    #         s = f'sell: {sp} ({target_sell})  ' if s is None else s + f'sell: {sp} ({target_sell})  '
+    #     if s is not None:
+    #         print(f'[{ut.loc_unix_dt(ts)}]  {s}')
+    # sell, buy = len(sell_prices.keys()), len(buy_prices.keys())
+    # print(len(list(buy_prices.keys())), len(list(sell_prices.keys())))
+    #
     # for ts in data.timestamp:
     #     bp, sp = buy_prices.get(ts), sell_prices.get(ts)
     #     if bp is not None or sp is not None:
@@ -425,12 +335,15 @@ def check_target_prices(i: Item, t0: int or float, t1: int or float, target_buy:
     #         if sp is not None:
     #             s += f'sell: {sp} ({target_sell})  '
     #         print(s[:-2])
-    print(
-        f'n_buy: {buy}/{n} / n_sell: {sell}/{n}')  # | n_missing: {n_missing}/{n_total} ({n_missing/n_total*100:.1f}%)')
-    return round(buy / n, 4), round(sell / n, 4)
+    # print(
+    #     f'n_buy: {buy}/{n} / n_sell: {sell}/{n}')  # | n_missing: {n_missing}/{n_total} ({n_missing/n_total*100:.1f}%)')
+    # return round(buy / n, 4), round(sell / n, 4)
+    
+    # TODO
+    raise NotImplementedError
 
 
-def activity_analysis(item: NpyArray, timestamp: int, full_day: bool = True):
+def activity_analysis():
     """
     Analyze the realtime entries for the given item per hour for a 24-hour timeframe. Resulting data provides an
     indication for the trading activity throughout the day. Note that this analysis involves realtime entries, which are
@@ -469,64 +382,67 @@ def activity_analysis(item: NpyArray, timestamp: int, full_day: bool = True):
     
     """
     # timestamp = timestamp - timestamp % 86400
-    timestamp = timestamp - timestamp % (86400 if full_day else 3600)
-    t_end = timestamp + 86400
+    # timestamp = timestamp - timestamp % (86400 if full_day else 3600)
+    # t_end = timestamp + 86400
     
     # Reduce arrays to data for this particular day
-    ts_mask = np.nonzero((item.timestamp >= timestamp) & (t_end > item.timestamp))
+    # ts_mask = np.nonzero((item.timestamp >= timestamp) & (t_end > item.timestamp))
     
-    timestamps = item.timestamp[ts_mask]
+    # timestamps = item.timestamp[ts_mask]
     
     # Avg5m volume arrays for this interval
-    buy, sell, total = item.buy_volume[ts_mask], item.sell_volume[ts_mask], item.avg5m_volume[ts_mask]
-    sum_b, sum_s, sum_t = np.sum(buy), np.sum(sell), np.sum(total)
+    # buy, sell, total = item.buy_volume[ts_mask], item.sell_volume[ts_mask], item.avg5m_volume[ts_mask]
+    # sum_b, sum_s, sum_t = np.sum(buy), np.sum(sell), np.sum(total)
     
     # As wiki volume, use the first wiki volume logged for this day
     # print(item.wiki_volume)
-    max_s, max_b = 0, 0
+    # max_s, max_b = 0, 0
     
-    results = []
+    # results = []
     # dt_0 = ts_to_dt(timestamp=timestamp)
     
     # Realtime entries use different timestamps and should therefore be loaded separately
-    df_s = load_realtime_entries(item_id=item.item_id, t0=timestamp, t1=t_end)
-    df_b, df_s = df_s.loc[df_s['is_sale'] == 0], df_s.loc[df_s['is_sale'] == 1]
-    n_rt_s, n_rt_b = len(df_s), len(df_b)
-    for h in range(24):
-        t0 = timestamp + h * 3600
-        t1 = t0 + 3600
-        ts_mask = np.nonzero((timestamps >= t0) & (t1 > timestamps))
-        b, s, t = buy[ts_mask], sell[ts_mask], total[ts_mask]
-        temp_dfs = df_s.loc[(df_s['timestamp'] >= t0) & (t1 > df_s['timestamp']) & (df_s['is_sale'] == 1)]
-        temp_dfb = df_b.loc[(df_b['timestamp'] >= t0) & (t1 > df_b['timestamp']) & (df_b['is_sale'] == 0)]
-        if len(temp_dfs) > max_s:
-            max_s = len(temp_dfs)
-        if len(temp_dfb) > max_b:
-            max_b = len(temp_dfb)
-        
-        # hour refers to the interval start
-        r = {'hour': ts_to_dt(t0, utc_time=True).hour}
-        # r['b'] = len(b)
-        # r['nz_buy'] = len(b[np.nonzero(b > 0)])
-        # r['nz_sell'] = len(s[np.nonzero(s > 0)])
-        # r['nz_total'] = len(t[np.nonzero(t > 0)])
-        
-        # This indicates the % of volume logged within the hour relative to the total logged volume for this day
-        r['%_volume_traded'] = np.round(np.sum(t) / sum_t, decimals=4) if sum_t > 0 else 0
-        
-        # Amount of entries logged within the hour relative to the amount of entries logged within this day
-        r['%_rt_sell'] = np.round(len(temp_dfs) / n_rt_s, decimals=4) if n_rt_s > 0 else 0
-        r['%_rt_buy'] = np.round(len(temp_dfb) / n_rt_b, decimals=4) if n_rt_b > 0 else 0
-        
-        # A value of 1 indicates the realtime buy and sell prices were updated at least once every minute for the hour
-        r['buy_activity'] = np.round(len(temp_dfb)/60, 4)
-        r['sell_activity'] = np.round(len(temp_dfs)/60, 4)
-        results.append(r)
-        print(ts_to_dt(t0, utc_time=True), r)
-    return results
+    # df_s = load_realtime_entries(item_id=item.item_id, t0=timestamp, t1=t_end)
+    # df_b, df_s = df_s.loc[df_s['is_sale'] == 0], df_s.loc[df_s['is_sale'] == 1]
+    # n_rt_s, n_rt_b = len(df_s), len(df_b)
+    # for h in range(24):
+    #     t0 = timestamp + h * 3600
+    #     t1 = t0 + 3600
+    #     ts_mask = np.nonzero((timestamps >= t0) & (t1 > timestamps))
+    #     b, s, t = buy[ts_mask], sell[ts_mask], total[ts_mask]
+    #     temp_dfs = df_s.loc[(df_s['timestamp'] >= t0) & (t1 > df_s['timestamp']) & (df_s['is_sale'] == 1)]
+    #     temp_dfb = df_b.loc[(df_b['timestamp'] >= t0) & (t1 > df_b['timestamp']) & (df_b['is_sale'] == 0)]
+    #     if len(temp_dfs) > max_s:
+    #         max_s = len(temp_dfs)
+    #     if len(temp_dfb) > max_b:
+    #         max_b = len(temp_dfb)
+    #
+    #     # hour refers to the interval start
+    #     r = {'hour': ts_to_dt(t0, utc_time=True).hour}
+    #     # r['b'] = len(b)
+    #     # r['nz_buy'] = len(b[np.nonzero(b > 0)])
+    #     # r['nz_sell'] = len(s[np.nonzero(s > 0)])
+    #     # r['nz_total'] = len(t[np.nonzero(t > 0)])
+    #
+    #     # This indicates the % of volume logged within the hour relative to the total logged volume for this day
+    #     r['%_volume_traded'] = np.round(np.sum(t) / sum_t, decimals=4) if sum_t > 0 else 0
+    #
+    #     # Amount of entries logged within the hour relative to the amount of entries logged within this day
+    #     r['%_rt_sell'] = np.round(len(temp_dfs) / n_rt_s, decimals=4) if n_rt_s > 0 else 0
+    #     r['%_rt_buy'] = np.round(len(temp_dfb) / n_rt_b, decimals=4) if n_rt_b > 0 else 0
+    #
+    #     # A value of 1 indicates the realtime buy and sell prices were updated at least once every minute for the hour
+    #     r['buy_activity'] = np.round(len(temp_dfb)/60, 4)
+    #     r['sell_activity'] = np.round(len(temp_dfs)/60, 4)
+    #     results.append(r)
+    #     print(ts_to_dt(t0, utc_time=True), r)
+    # return results
+    
+    # TODO
+    raise NotImplementedError
 
 
-def get_saturated_items(item_ids: list = go.item_ids, threshold_price: float = .9):
+def get_saturated_items():
     """
     Fetch a list of items of which the buy offers are estimated to be saturated, indicating a recent dump or an
     unusually large amount of items being sold within the past 4 hours
@@ -540,44 +456,47 @@ def get_saturated_items(item_ids: list = go.item_ids, threshold_price: float = .
     -------
 
     """
-    output, ct = [], int(time.time())
-    con = sqlite3.connect(p.f_db_timeseries)
-    cursor = con.cursor()
-    for item_id in item_ids:
-        i, cur = NpyArray(item_id), {'item_id': item_id, 'name': go.id_name[item_id]}
-        cur['buy_limit'] = i.buy_limit
-        cur['volume'] = int(np.average(i.wiki_volume[-7:]))
-        if cur.get('volume') < i.buy_limit * 10:
-            print(f'\tSkipped {go.id_name[item_id]}')
-            continue
-        try:
-            
-            rt_prices = load_realtime_entries(item_id=item_id, t0=ct-86400, t1=ct, c=cursor)
-            for h_tag, timespan in zip(['4h', '24h'], [14400, 86400]):
-                t0 = ct-timespan
-                b = i.buy_price[np.nonzero((i.timestamp >= t0) & (i.buy_price > 0))]
-                s = i.sell_price[np.nonzero((i.timestamp >= t0) & (i.sell_price > 0))]
-                b_s = np.sort(np.append(b, s))
-                rt_b = rt_prices.loc[~(rt_prices['is_sale']) & (rt_prices['timestamp'] > t0)].to_numpy()
-                rt_s = rt_prices.loc[(rt_prices['is_sale']) & (rt_prices['timestamp'] > t0)].to_numpy()
-                cur.update({
-                    f'p_avg_{h_tag}': int(np.average(b_s)),
-                    f's_avg_{h_tag}': int(np.average(s)),
-                    f'b_avg_{h_tag}': int(np.average(b)),
-                    f'b_std_{h_tag}': np.std(b),
-                    f'p_min_{h_tag}': int(b_s[0]),
-                    f'p_max_{h_tag}': int(b_s[-1]),
-                    f'delta_p_{h_tag}': int(b_s[-1]-b_s[0]-int(b_s[-1]*.01)) * i.buy_limit,
-                    f'n_rt_{h_tag}': len(rt_s) + len(rt_b),
-                    f'rt_b_std_{h_tag}': np.std(rt_b),
-                    f'rt_s_std_{h_tag}': np.std(rt_s)
-                })
-        except ValueError:
-            print(f'ValueError for item {go.id_name[item_id]}')
-        finally:
-            if len(output) % 25 == 0:
-                print(f'Processed {len(output)}/{len(item_ids)} items')
-            output.append(cur)
-    pd.DataFrame(output).to_csv(p.dir_output+'saturated_items.csv',index=False)
+    # output, ct = [], int(time.time())
+    # con = sqlite3.connect(p.f_db_timeseries)
+    # cursor = con.cursor()
+    # for item_id in item_ids:
+    #     i, cur = NpyArray(item_id), {'item_id': item_id, 'name': go.id_name[item_id]}
+    #     cur['buy_limit'] = i.buy_limit
+    #     cur['volume'] = int(np.average(i.wiki_volume[-7:]))
+    #     if cur.get('volume') < i.buy_limit * 10:
+    #         print(f'\tSkipped {go.id_name[item_id]}')
+    #         continue
+    #     try:
+    #
+    #         rt_prices = load_realtime_entries(item_id=item_id, t0=ct-86400, t1=ct, c=cursor)
+    #         for h_tag, timespan in zip(['4h', '24h'], [14400, 86400]):
+    #             t0 = ct-timespan
+    #             b = i.buy_price[np.nonzero((i.timestamp >= t0) & (i.buy_price > 0))]
+    #             s = i.sell_price[np.nonzero((i.timestamp >= t0) & (i.sell_price > 0))]
+    #             b_s = np.sort(np.append(b, s))
+    #             rt_b = rt_prices.loc[~(rt_prices['is_sale']) & (rt_prices['timestamp'] > t0)].to_numpy()
+    #             rt_s = rt_prices.loc[(rt_prices['is_sale']) & (rt_prices['timestamp'] > t0)].to_numpy()
+    #             cur.update({
+    #                 f'p_avg_{h_tag}': int(np.average(b_s)),
+    #                 f's_avg_{h_tag}': int(np.average(s)),
+    #                 f'b_avg_{h_tag}': int(np.average(b)),
+    #                 f'b_std_{h_tag}': np.std(b),
+    #                 f'p_min_{h_tag}': int(b_s[0]),
+    #                 f'p_max_{h_tag}': int(b_s[-1]),
+    #                 f'delta_p_{h_tag}': int(b_s[-1]-b_s[0]-int(b_s[-1]*.01)) * i.buy_limit,
+    #                 f'n_rt_{h_tag}': len(rt_s) + len(rt_b),
+    #                 f'rt_b_std_{h_tag}': np.std(rt_b),
+    #                 f'rt_s_std_{h_tag}': np.std(rt_s)
+    #             })
+    #     except ValueError:
+    #         print(f'ValueError for item {go.id_name[item_id]}')
+    #     finally:
+    #         if len(output) % 25 == 0:
+    #             print(f'Processed {len(output)}/{len(item_ids)} items')
+    #         output.append(cur)
+    # pd.DataFrame(output).to_csv(p.dir_output+'saturated_items.csv',index=False)
+    
+    # TODO
+    raise NotImplementedError
     
     

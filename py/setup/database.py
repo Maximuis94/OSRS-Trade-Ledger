@@ -128,43 +128,6 @@ def setup_sqlite_db(local_path: str = None, timeseries_db_path: str = None, add_
     return True
 
 
-def setup_dataframes(log, idx):
-    """ Full setup of base data frame used throughout the project """
-    ts = int(time.time())
-    # Dataframe columns and corresponding dtypes
-    itemdb_df = pd.DataFrame(data=None, columns=var.item_columns)
-    itemdb_df = itemdb_df.astype({c: var.item_types.get(c).df for c in var.item_columns})
-    itemdb_df.to_pickle(gp.f_df_itemdb)
-    e = log[idx]
-    e['update_ts'] = ts + e.get('update_frequency')
-    log[idx] = e
-    log[idx] = e
-    avg5mdb_df = pd.DataFrame(data=None, columns=var.avg5m_columns)
-    avg5mdb_df = avg5mdb_df.astype(dtype={c: var.avg5m_types.get(c).df for c in var.avg5m_columns})
-    avg5mdb_df.to_pickle(gp.f_df_avg5m)
-    e = log[idx+1]
-    e['update_ts'] = ts + e.get('update_frequency')
-    log[idx+1] = e
-    rtdb_df = pd.DataFrame(data=None, columns=var.realtime_columns)
-    rtdb_df = rtdb_df.astype(dtype={c: var.realtime_types.get(c).df for c in var.avg5m_columns})
-    rtdb_df.to_pickle(gp.f_df_rtdb)
-    e = log[idx+2]
-    e['update_ts'] = ts + e.get('update_frequency')
-    log[idx+2] = e
-    wikidb_df = pd.DataFrame(data=None, columns=var.wiki_columns)
-    wikidb_df = wikidb_df.astype(dtype={c: var.wiki_types.get(c).df for c in var.wiki_columns})
-    wikidb_df.to_pickle(gp.f_df_wikidb)
-    e = log[idx+3]
-    e['update_ts'] = ts + e.get('update_frequency')
-    log[idx+3] = e
-
-    # print({itemdb_df.columns[c]: itemdb_dtypes[c] for c in range(len(itemdb_cols))})
-    # print({avg5mdb_df.columns[c]: avg5mdb_dtypes[c] for c in range(len(avg5mdb_cols))})
-    # print({rtdb_df.columns[c]: rtdb_dtypes[c] for c in range(len(rtdb_cols))})
-    # print({wikidb_df.columns[c]: wikidb_dtypes[c] for c in range(len(wikidb_cols))})
-    return log
-
-
 def generate_test_db(src_dbs: str or Iterable[str], **kwargs):
     """
      Generate a database that can be used for testing. It contains one week of timeseries data and all transactions,

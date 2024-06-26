@@ -70,7 +70,7 @@ def async_extract_rows(db: str, item_ids: list, backup_dir: str = gp.dir_timeser
                 out_file = f'{backup_dir}{src}/{cur_id:0>5}.dat'
                 if os.path.exists(out_file) and os.path.getmtime(out_file) > min_modified_time:
                     try:
-                        f = uf.load(out_file)[0]
+                        _ = uf.load(out_file)[0]
                         continue
                     except pickle.UnpicklingError:
                         os.remove(out_file)
@@ -134,8 +134,8 @@ def async_extract_rows_old(db_file: str, item_ids: list = None, backup_dir: str 
                 uf.save(rows, path=out_file)
                 print(f'[{fmt.unix_(time.time())}] {cur_id:0>5}_src_{src}', end='\r')
         except WindowsError as e:
-            # print(str(e), f'@ item_id={cur_id}')
-            ...
+            print(str(e), f'@ item_id={cur_id}')
+            # ...
 
 
 rt_start = time.perf_counter()
@@ -223,7 +223,6 @@ def backup_db(db_file: str, backup_directory: str, n_threads: int = 4, item_ids:
     if not os.path.exists(backup_directory):
         print(f' Creating {backup_directory}')
         os.mkdir(backup_directory)
-    t_ = time.time()
     for src in srcs:
         _dir = backup_directory+f'{src}/'
         if not os.path.exists(_dir):
@@ -307,7 +306,7 @@ def create_backup(db: str or TimeseriesDB = gp.f_db_timeseries, backup_directory
 
 
 def restore_backup(db: TimeseriesDB, backup_dir: str = gp.dir_timeseries_backup, item_ids: Iterable = None,
-                   srcs: Iterable = None, t0: int = None, t1: int = None, replace: bool = True, resume_backup: bool = True) -> List[tuple]:
+                   srcs: Iterable = None, t0: int = None, t1: int = None, replace: bool = True) -> List[tuple]:
     """
     Restore backup data stored in `backup_dir`
     
@@ -327,8 +326,6 @@ def restore_backup(db: TimeseriesDB, backup_dir: str = gp.dir_timeseries_backup,
         Upper bound timestamp; omit entries with a timestamp that exceed this value
     replace : bool, optional, True by default
         If True, execute INSERT OR REPLACE instead of just INSERT, allowing rows to be overwritten.
-    resume_backup: bool, optional, True by default
-        If True, do not overwrite any backup files.
         
     Returns
     -------
@@ -347,7 +344,7 @@ def restore_backup(db: TimeseriesDB, backup_dir: str = gp.dir_timeseries_backup,
         srcs = db.execute('SELECT DISTINCT src, MAX(timestamp) FROM item00002', factory=0).fetchall()
         
     if t0 is None and t1 is None:
-        def include_row(row):
+        def include_row(*_):
             return True
     elif t1 is None:
         def include_row(row):

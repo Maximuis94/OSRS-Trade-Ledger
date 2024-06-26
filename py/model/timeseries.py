@@ -155,7 +155,6 @@ class TimeseriesDB(Database):
         try:
             global queried_item_id
             queried_item_id = item_id
-            queried_item = create_item(item_id=item_id)
             con.execute(self.get_sql_insert(item_id, replace), (src, timestamp, price, volume))
         except sqlite3.OperationalError as e:
             if self.create_missing_tables and self.auto_create_table(e, item_id, con):
@@ -261,7 +260,7 @@ class TimeseriesDB(Database):
         """ Return the npy array timestamp lower- and upper- bound as a tuple """
         t1 = self.cursors.get(0).execute("""SELECT MAX(timestamp) FROM "item00002" WHERE src in (1, 2)""").fetchone()
         t1 = t1 - t1 % 14400
-        return t1 - t1 % 86400 - cfg.npy_array_timespan_days * 86400, t1
+        return t1 - t1 % 86400 - cfg.npy_db_timespan * 86400, t1
         
     @staticmethod
     def factory_datapoint_item_id(c: sqlite3.Cursor, row: tuple) -> TimeseriesDatapoint:

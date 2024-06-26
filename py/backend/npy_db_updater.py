@@ -47,7 +47,7 @@ class NpyDbUpdater(Database):
     array_directory = gp.dir_npy_arrays
     
     def __init__(self, db_path: str = gp.f_db_npy, source_db_path: str = gp.f_db_timeseries, new_db: bool = False,
-                 item_ids: Sequence = go.npy_items, prices_listbox_path: str = None, execute_update: bool = True, add_arrays: bool = True, **kwargs):
+                 item_ids: Sequence = go.npy_items, prices_listbox_path: str = gp.f_prices_listbox, execute_update: bool = True, add_arrays: bool = True, **kwargs):
         
         if new_db and os.path.exists(db_path):
             os.remove(db_path)
@@ -146,7 +146,7 @@ class NpyDbUpdater(Database):
             t1 = max(t1, self.src_db.execute(
                 self.set_table_name(f"""SELECT MAX(timestamp) FROM ___ WHERE src in (1, 2)""", i),
                 factory=0).fetchone())
-        self.t0, self.t1 = int(t1 - t1 % 86400 - cfg.npy_array_timespan_days * 86400), int(t1 - t1 % 14400)
+        self.t0, self.t1 = int(t1 - t1 % 86400 - cfg.npy_db_timespan * 86400), int(t1 - t1 % 14400)
         self.timestamps = range(self.t0, self.t1, 300)
         global min_timestamp, max_timestamp
         min_timestamp, max_timestamp = self.t0, self.t1
@@ -273,7 +273,7 @@ class NpyDbUpdater(Database):
                             params.append(0)
                         self.con.execute(sql_i, tuple(params))
                         if self.prices_listbox is not None:
-                            self.update_prices_listbox_entry(item_id=item_id, n_rows=cfg.prices_listbox_days, db_con=self)
+                            self.update_prices_listbox_entry(item_id=item_id, n_rows=cfg.prices_listbox_days)
                             self.updated_listbox = True
                 if item_rows > 0:
                     self.con.commit()
@@ -566,7 +566,7 @@ class NpyDbUpdater(Database):
         except PermissionError:
             return -1
 
-    def update_prices_listbox_entry(self, item_id: int, n_rows: int = cfg.prices_listbox_days, n_intervals: int = 6) -> list:
+    def update_prices_listbox_entry(self, item_id: int, n_rows: int = cfg.prices_listbox_days, n_intervals: int = 6):
         """
         Compute prices listbox entries for `item_id`. Each row shows the price development for an item throughout the
         day and summarizes this.

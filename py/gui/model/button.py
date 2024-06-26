@@ -43,7 +43,7 @@ class GuiButton(ttk.Button, GuiWidget):
         self.command_kwargs = command_kwargs
         self.command = command
 
-        super().__init__(command=self.execute_command, **kwargs)
+        super().__init__(command=self.execute_command, width=width, **kwargs)
         super(GuiWidget, self).__init__(frame, grid_tag, grid, event_bindings)
         self.add_tk_var(var=tk.BooleanVar() if variable is None else variable, key='bool')
         self.add_tk_var(var=tk.StringVar() if textvariable is None else textvariable, key='text')

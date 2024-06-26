@@ -146,10 +146,6 @@ def datapoint(row: dict) -> List[TimeseriesRow]:
     raise ValueError(f'Unable to determine LegacyRow typing for row {row}')
 
 
-def get_sqls(table):
-    ...
-
-
 if __name__ == "__main__":
     nt = namedtuple('Avg5mDatapoint', ['timestamp', 'buy_price', 'buy_volume', 'sell_price', 'sell_volume'])
     for el in get_dtypes(nt):

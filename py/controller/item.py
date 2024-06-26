@@ -250,9 +250,9 @@ class ItemController(Database):
         self.set_item_factory(augment_items)
         try:
             return self.execute(self.select_by_id, {'item_id': item_id}).fetchone()
-        except OSError:
+        except OSError as e:
             print(item_id, self.select_by_id)
-            return None
+            raise e
     
     def all_items(self, augment_items: bool = None) -> List[Item]:
         """ Load all item rows from the database and return them """
@@ -262,11 +262,13 @@ class ItemController(Database):
     
     def insert_item(self, item: Item):
         """ Insert `item` as a new entry into the database. NB this will only create a new row! """
+        raise NotImplementedError("Added @ 26-06")
         self.insert_rows(table_name=self.table_name, rows=[item.sql_row()], replace=False)
     
     def update_item(self, item: Item, attribute_subset: Iterable = None, replace: bool = True,
                     return_row: bool = False):
         """ Overwrite db entry using values from `item`, pass an Iterable with attributes to update only a subset """
+        raise NotImplementedError("Added @ 26-06")
         if attribute_subset is not None and replace:
             row = self.get_item(item_id=item.item_id).sql_row()
             row.update({k: item.__dict__.get(k) for k in attribute_subset})

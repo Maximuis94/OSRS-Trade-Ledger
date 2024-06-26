@@ -260,7 +260,7 @@ def check_real(column_name: str) -> str:
     return f'{column_name}>=0.0'
 
 
-def check_src(column_name: str) -> str:
+def check_src() -> str:
     """ Return the CHECK constraint for boolean values for `column_name` that can be added to the CREATE statement """
     return f'CHECK (src BETWEEN 0 AND 4)'
     
@@ -296,9 +296,9 @@ def get_check(column_name: str) -> str:
     """
     try:
         if column_name == 'src':
-            return check_src(column_name)
+            return check_src()
         return f"CHECK ({sqlite_check.get(types.get(column_name).py)(column_name)})"
-    except AttributeError as e:
+    except AttributeError:
         raise AttributeError(f'AttributeError while attempting to generate a CHECK clause for column_name={column_name}'
                              f', this is likely due to `column_name` {column_name} not being listed in the '
                              f'global_variables.variables.types dict. If it should be, it may be due to a typo.')
