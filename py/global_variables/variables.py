@@ -110,7 +110,17 @@ types = {
     'n_avg5m_b': _dtype_ui32,
     'n_avg5m_s': _dtype_ui32,
     'n_rt_b': _dtype_ui32,
-    'n_rt_s': _dtype_ui32
+    'n_rt_s': _dtype_ui32,
+    'average_buy': _dtype_ui32,
+    'balance': _dtype_ui64,
+    'profit': _dtype_ui64,
+    'value': _dtype_ui64,
+    'n_sold': _dtype_ui64,
+    'n_sales': _dtype_ui32,
+    'n_bought': _dtype_ui64,
+    'n_purchases': _dtype_ui32,
+    'tax': _dtype_ui64
+    
     
 }
 columns = list(types.keys())

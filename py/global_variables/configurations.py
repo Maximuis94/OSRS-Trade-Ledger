@@ -113,6 +113,12 @@ archive_transfer_timeseries = ['avg5m', 'realtime', 'wiki']
 
 timeseries_data_update_frequency = 3600
 
+# If the number of localdb backups exceeds this amount, remove the oldest backup. Db is relatively small
+max_localdb_backups = 10
+
+# Minimum time between 2 localdb backups (s). Prevents all existing backups from being made in a very short timeframe.
+localdb_backup_cooldown = 10800
+
 
 ###########################################################################
 # NpyArray updater configurations

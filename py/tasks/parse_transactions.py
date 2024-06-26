@@ -100,6 +100,7 @@ from controller.item import remap_item, create_item
 
 import global_variables.path as gp
 import global_variables.osrs as go
+import global_variables.configurations as cfg
 
 import util.unix_time as ut
 
@@ -412,7 +413,20 @@ def submit_transaction_queue(queue_file: str = gp.f_exchange_log_queue, submit_d
         con.commit()
         con.close()
         uf.save(data=queue, path=queue_file)
-    
+        
+        try:
+            backup_db = time.time() - os.path.getmtime(uf.get_newest_file(gp.dir_backup_localdb)) > cfg.localdb_backup_cooldown
+        except ValueError:
+            backup_db = True
+            
+        if backup_db:
+            shutil.copy2(gp.f_db_local, gp.dir_backup_localdb+f'localdb_{int(time.time())}.db')
+            
+            # Max backups exceeded -> Remove oldest backup
+            while len(uf.get_files(gp.dir_backup_localdb)) > max(3, cfg.max_localdb_backups):
+                print(f'Removing backup {uf.get_oldest_file(uf.get_files(gp.dir_backup_localdb))}...')
+                os.remove(uf.get_oldest_file(uf.get_files(gp.dir_backup_localdb)))
+        
     # Export submissions to a readable csv file
     try:
         if csv_file is not None:

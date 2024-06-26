@@ -71,7 +71,18 @@ transaction = Table(table_name='transaction', db_file=f_db_local,
                         Column(name='price', add_check=True),
                         Column(name='status', default_value=1),
                         Column(name='tag', is_nullable=False),
-                        Column(name='update_ts', is_nullable=False)
+                        Column(name='update_ts', is_nullable=False),
+                        
+                        Column(name='average_buy', is_nullable=False, default_value=0),
+                        Column(name='balance', is_nullable=False, default_value=0),
+                        Column(name='profit', is_nullable=False, default_value=0),
+                        Column(name='value', is_nullable=False, default_value=0),
+                        Column(name='n_bought', is_nullable=False, default_value=0),
+                        Column(name='n_purchases', is_nullable=False, default_value=0),
+                        Column(name='n_sold', is_nullable=False, default_value=0),
+                        Column(name='n_sales', is_nullable=False, default_value=0),
+                        Column(name='tax', is_nullable=False, default_value=0)
+                        
                     ])
 
 tables = {k: t for k, t in dict(locals()).items() if isinstance(t, Table)}

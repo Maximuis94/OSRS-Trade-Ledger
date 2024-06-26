@@ -28,6 +28,8 @@ from global_variables.data_classes import Transaction as _Transaction
 # transaction_db = Db(path=gp.f_db_transaction, parse_tables=True, read_only=True)
 
 
+
+
 class Transaction(_Transaction):
     """
     Abstract Base Class for a Transaction. Serves as a template for transactions.
@@ -78,7 +80,7 @@ class Transaction(_Transaction):
     
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.item = kwargs.get('item')
+        # self.item = create_item(item_id=1)
         if isinstance(self.item_id, Item):
             self.item = self.item_id
             self.item_id = self.item.item_id
@@ -145,7 +147,7 @@ class Transaction(_Transaction):
     @staticmethod
     def factory_transaction(cursor: sqlite3.Cursor, r):
         """ Transaction factory that can be used to return database entries as Transactions """
-        return Transaction(transaction_id=r[0], kwargs={c[0]: r[i+1] for i, c in enumerate(Transaction.columns[1:])})
+        return Transaction(**{c[0]: r[i] for i, c in enumerate(cursor.description)})
     
 
 class Purchase(Transaction):
@@ -158,7 +160,7 @@ class Purchase(Transaction):
     def __init__(self, transaction: dict, manual: bool = False, **kwargs):
         transaction['is_buy'] = True
         transaction['tag'] = go.transaction_tag_purchase_m if manual else go.transaction_tag_purchase
-        super().__init__(transaction_data=transaction)
+        super().__init__(**transaction)
 
 
 class Sale(Transaction):
@@ -171,7 +173,7 @@ class Sale(Transaction):
     def __init__(self, transaction: dict, **kwargs):
         transaction['is_buy'] = False
         transaction['tag'] = go.transaction_tag_sale_m if kwargs.get('manual') else go.transaction_tag_sale
-        super().__init__(transaction_data=transaction)
+        super().__init__(**transaction)
 
 
 class Correction(Transaction):
@@ -186,7 +188,7 @@ class Correction(Transaction):
     def __init__(self, transaction: dict, **kwargs):
         transaction['is_buy'] = True
         transaction['tag'] = go.transaction_tag_correction
-        super().__init__(transaction_data=transaction)
+        super().__init__(**transaction)
 
 
 class Consumption(Transaction):
@@ -199,7 +201,7 @@ class Consumption(Transaction):
     def __init__(self, transaction: dict):
         transaction['is_buy'] = False
         transaction['tag'] = go.transaction_tag_consumed
-        super().__init__(transaction_data=transaction)
+        super().__init__(**transaction)
 
 
 class Production(Transaction):
@@ -214,7 +216,7 @@ class Production(Transaction):
     def __init__(self, transaction: dict, **kwargs):
         transaction['is_buy'] = True
         transaction['tag'] = go.transaction_tag_produced
-        super().__init__(transaction_data=transaction)
+        super().__init__(**transaction)
 
 
 class StockCount(Transaction):
@@ -234,7 +236,7 @@ class StockCount(Transaction):
     def __init__(self, transaction: dict, **kwargs):
         transaction['is_buy'] = False
         transaction['tag'] = go.transaction_tag_counted
-        super().__init__(transaction_data=transaction)
+        super().__init__(**transaction)
         self.new_price = transaction.get('status')
     
     @override
@@ -253,7 +255,7 @@ class Bond(Transaction):
         transaction['item_id'] = 13190
         transaction['is_buy'] = True
         transaction['tag'] = go.transaction_tag_bond
-        super().__init__(transaction_data=transaction)
+        super().__init__(**transaction)
 
 
 _transactions_by_tag = {
@@ -287,8 +289,21 @@ def transaction_from_dict(t_dict: dict) -> Transaction:
         raise TypeError
 
 
+def transaction_subclass_factory(c: sqlite3.Cursor, row: tuple):
+    return transaction_from_dict({col[0]: row[i] for i, col in enumerate(c.description)})
+
+
 def factory_transaction_subclass(c: sqlite3.Cursor, row) -> Transaction:
-    """ Row factory that generates a subclass of Transaction, based on the given tag """
+    """ Row factory that generates a subclass of Transaction and casts values, based on the given tag """
     return transaction_from_dict(
         t_dict={col[0]: gd.transaction_types.get(col[0]).py(row[idx]) for idx, col in enumerate(c.description)}
     )
+
+
+def transaction_parser(db_path: str) -> sqlite3.Connection:
+    """ Return a read-only connection with `db_path` and transaction_subclass_factory as row_factory """
+    output = sqlite3.connect(database=f"file:{db_path}?mode=ro", uri=True)
+    output.row_factory = factory_transaction_subclass
+    return output
+
+    

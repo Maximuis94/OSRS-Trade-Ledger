@@ -59,6 +59,7 @@ dir_logger = dir_output + 'log/'
 dir_batch = dir_data + 'batches/'
 dir_batch_merged = dir_batch + 'merged/'
 dir_backup = dir_data + 'backups/'
+dir_backup_localdb = dir_backup + 'localDB/'
 dir_ledger_backups = dir_backup + 'ledger/'
 
 ##########################################################

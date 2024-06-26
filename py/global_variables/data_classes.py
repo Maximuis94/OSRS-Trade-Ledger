@@ -126,6 +126,17 @@ class Transaction:
     update_ts: int = field(compare=False)
     
     # Post-transactional-values?
+    average_buy: int = field(default=0, compare=False)
+    balance: int = field(default=0, compare=False)
+    profit: int = field(default=0, compare=False)
+    value: int = field(default=0, compare=False)
+    n_bought: int = field(default=0, compare=False)
+    n_purchases: int = field(default=0, compare=False)
+    n_sold: int = field(default=0, compare=False)
+    n_sales: int = field(default=0, compare=False)
+    tax: int = field(default=0, compare=False)
+    
+
 
 
 # Datapoint classes are datapoints of scraped data
