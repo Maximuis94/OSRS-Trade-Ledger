@@ -19,13 +19,14 @@ import pandas as pd
 
 import global_variables.configurations as cfg
 import global_variables.path as gp
+import global_variables.osrs as go
 import global_variables.variables as var
 import sqlite.executable_statements
 import sqlite.row_factories
 import util.file as uf
 import util.str_formats as fmt
 from controller.item import ItemController, Item
-from global_variables.data_classes import TimeseriesRow, rbpi_dbs
+from global_variables.data_classes import TimeseriesRow, rbpi_dbs, Row
 from model.database import Database
 from util.data_structures import datapoint
 
@@ -114,22 +115,29 @@ def parse_batch(batch_path: str, out_file: str = None, dir_out: str = None) -> L
                     ts = row.get('timestamp')
                     min_ts, max_ts = min(min_ts, ts), max(max_ts, ts)
     except ValueError:
-        for dt, rows in zip(batch[0], batch[1]):
-            
-            for row in pd.DataFrame(rows, columns=list(dt.keys())).astype(dt).to_dict('records'):
+        if isinstance(batch[0], Row):
+            parsed = batch
+            for el in batch:
+                if el.item_id in go.most_traded_items:
+                    ts = el.timestamp
+                    min_ts, max_ts = min(min_ts, ts), max(max_ts, ts)
+        else:
+            for dt, rows in zip(batch[0], batch[1]):
                 
-                try:
-                    dp = datapoint(row)
-                    parsed += dp
-                    n += len(dp)
-                    if dir_out and row.get('buy_price') is not None and row.get('item_id') == 2:
-                        ts = row.get('timestamp')
-                        min_ts, max_ts = min(min_ts, ts), max(max_ts, ts)
-                except ValueError:
-                    if row.get('is_sale') is not None:
-                        row['is_buy'] = 1-int(row['is_sale'])
-                        parsed += datapoint(row)
-                        n += 1
+                for row in pd.DataFrame(rows, columns=list(dt.keys())).astype(dt).to_dict('records'):
+                    
+                    try:
+                        dp = datapoint(row)
+                        parsed += dp
+                        n += len(dp)
+                        if dir_out and row.get('buy_price') is not None and row.get('item_id') == 2:
+                            ts = row.get('timestamp')
+                            min_ts, max_ts = min(min_ts, ts), max(max_ts, ts)
+                    except ValueError:
+                        if row.get('is_sale') is not None:
+                            row['is_buy'] = 1-int(row['is_sale'])
+                            parsed += datapoint(row)
+                            n += 1
     
     if track_ts:
         min_ts, max_ts = round(min_ts/14400, 0)*14400, round(max_ts/14400, 0)*14400
@@ -275,7 +283,7 @@ def parse_tables(db_to: sqlite3.Connection, db_dict: dict = rbpi_dbs, t0: int = 
             raise ValueError(f'db_dict {db_dict} does not have an entry for {src}')
         
         path, table = db_dict.get(src)
-        con = Database(path, parse_tables=False)
+        con = Database(path, parse_tables=False, read_only=False)
         con.row_factory = rbpi_table_row_factory
         # _t0 = con.get_max(table=src, column='timestamp', suffix=f"WHERE timestamp > {ts_threshold}")-1
         rows = con.execute(f"SELECT * FROM {table} WHERE timestamp > ? AND timestamp < ?", (t0, t1)).fetchall()
