@@ -6,14 +6,11 @@ import datetime
 import os
 import shutil
 import time
-from abc import abstractmethod
 from collections.abc import Callable, Iterable
-from typing import Dict
+from typing import Dict, Tuple
 
 from .util import save, load, IOProtocol, _get_protocol
 
-
-    
 
 class File(str):
     """
@@ -197,6 +194,14 @@ class File(str):
         if del_args is not None:
             for k in frozenset(self.default_args).intersection(del_args):
                 del self.default_args[k]
+    
+    def split_ext(self) -> Tuple[str, str]:
+        """ Return this File's path as a tuple of the file path without extension and its extension (including .) """
+        return os.path.splitext(self.path)
+    
+    def has_ext(self, ext: str) -> bool:
+        """ Return True if this file ends with extension `ext` """
+        return self.extension.endswith(ext)
     
     def __repr__(self):
         return self.path
