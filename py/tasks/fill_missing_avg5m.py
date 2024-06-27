@@ -192,7 +192,7 @@ def fill_missing_avg5m(db_file: str = gp.f_db_timeseries, cooldown: float = 3.0,
     if db_size_start is None:
         db_size_start = os.path.getsize(db_file)
     
-    db = Database(db_file)
+    db = Database(db_file, read_only=False)
     
     if ub_ts is None:
         ub_ts = 0
@@ -255,8 +255,9 @@ def fill_missing_avg5m(db_file: str = gp.f_db_timeseries, cooldown: float = 3.0,
 
 
 if __name__ == '__main__':
+    t1 = int(time.time())
+    fill_missing_avg5m(lb_ts=1719409800, ub_ts=t1-t1%14400)
     # fill_missing_avg5m(lb_ts=val.min_avg5m_ts_query_online)
-    fill_missing_avg5m(lb_ts=val.min_avg5m_ts_query_online)
     
     exit(1)
     db = Database(gp.f_db_timeseries)

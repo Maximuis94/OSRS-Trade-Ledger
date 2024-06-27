@@ -277,7 +277,7 @@ class Database(sqlite3.Connection):
                 continue
             columns = []
             
-            if not parse_full and _table.name not in table_filter:
+            if not parse_full and table_filter is not None and _table.name not in table_filter:
                 continue
                 
             for column in self.execute(f"PRAGMA table_info('{_table.name}')").fetchall():
@@ -292,13 +292,14 @@ class Database(sqlite3.Connection):
                 ))
             if parse_one:
                 s = ''
-                for _char in table.name:
+                for _char in _table.name:
                     if not _char.isdigit():
                         s += _char
                     else:
                         s += '_'
-                _table.name = s
-            self.tables[_table.name] = Table(table_name=_table.name, columns=columns, foreign_keys=[],
+            else:
+                s = _table.name
+            self.tables[_table.name] = Table(table_name=s, columns=columns, foreign_keys=[],
                                              db_file=self.db_path)
             if parse_one:
                 return
