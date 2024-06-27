@@ -25,6 +25,7 @@ import util.str_formats as fmt
 import util.unix_time as ut
 from controller.item import create_item, Item
 from data_processing.npy_array_computations import avg_price_summed_volume
+from file.file import File
 from global_variables.data_classes import NpyDatapoint as NpyDp
 from model.database import Database
 
@@ -47,7 +48,8 @@ class NpyDbUpdater(Database):
     array_directory = gp.dir_npy_arrays
     
     def __init__(self, db_path: str = gp.f_db_npy, source_db_path: str = gp.f_db_timeseries, new_db: bool = False,
-                 item_ids: Sequence = go.npy_items, prices_listbox_path: str = gp.f_prices_listbox, execute_update: bool = True, add_arrays: bool = True, **kwargs):
+                 item_ids: Sequence = go.npy_items, prices_listbox_path: File = gp.f_prices_listbox,
+                 execute_update: bool = True, add_arrays: bool = True, **kwargs):
         
         if new_db and os.path.exists(db_path):
             os.remove(db_path)
@@ -101,7 +103,7 @@ class NpyDbUpdater(Database):
             self.ts_con_avg5m
         ]
         try:
-            self.db_size_start = os.path.getsize(self.db_path)
+            self.db_size_start = self.fsize()
         except FileNotFoundError:
             self.db_size_start = 0
         self.t0, self.t1, self.timestamps, self.t_start = 0, 0, [], time.perf_counter()
@@ -156,12 +158,12 @@ class NpyDbUpdater(Database):
         n_tables = f"New tables: {n_created}  " if n_created > 0 else ""
         if len(exe_times_item) > 0:
             print(f'\t[{fmt.delta_t(time.perf_counter() - self.t_start)}] Items: {idx + 1}/{n_items}  '
-                  f'Db size: +{fmt.fsize(os.path.getsize(self.db_path) - self.db_size_start)}  '
+                  f'Db size: +{fmt.fsize(self.fsize() - self.db_size_start)}  '
                   f'Rows [+ {n_rows} / - {n_deleted}]  {n_tables}'
                   f'Avg/item: {fmt.delta_t(sum(exe_times_item) / len(exe_times_item))}', end='\r')
         else:
             print(f'\t[{fmt.delta_t(time.perf_counter() - self.t_start)}] Items: {idx + 1}/{n_items}  '
-                  f'Db size: +{fmt.fsize(os.path.getsize(self.db_path) - self.db_size_start)}  '
+                  f'Db size: +{fmt.fsize(self.fsize() - self.db_size_start)}  '
                   f'Rows [+ {n_rows} / - {n_deleted}]  {n_tables}', end='\r')
     
     def generate_db(self, item_ids: Sequence = go.npy_items, t0: int = None, t1: int = None):
@@ -334,7 +336,7 @@ class NpyDbUpdater(Database):
     
     def save_prices_listbox(self):
         if self.prices_listbox_path is not None and self.updated_listbox:
-            uf.save(self.prices_listbox, self.prices_listbox_path)
+            self.prices_listbox_path.save(self.prices_listbox)
             self.updated_listbox = False
     
     def generate_rows(self, item_id: int = None, t0: int = None, t1: int = None):
@@ -346,7 +348,7 @@ class NpyDbUpdater(Database):
                 list(self.get_src_data(2, timestamp, item_id)) +
                 [self.get_src_data(5, timestamp, item_id)]
                 for timestamp in range(self.t0 if t0 is None else t0, (self.t1 if t1 is None else t1), 300)]
-        
+    
     def get_src_data(self, src: int, timestamp: int, item_id: int = None):
         """
         Get data from source `src` from the currently configured item_id or set config to `item_id`, if specified.````

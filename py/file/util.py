@@ -231,8 +231,9 @@ def _save_npy(data: np.ndarray, path: str, **kwargs):
     ----------
     https://numpy.org/doc/stable/reference/routines.io.html
     """
-    keys = ('fix_imports', 'allow_pickle')
-    np.save(path, data, **{k: kwargs.get(k) for k in keys if kwargs.get(k) is not None})
+    _kwargs = {'fix_imports': True, 'allow_pickle': True}
+    _kwargs.update({kwargs.get(k) for k in frozenset(_kwargs).intersection(kwargs)})
+    np.save(path, data, **_kwargs)
 
 
 def _load_npy(path: str, **kwargs):
@@ -266,8 +267,9 @@ def _load_npy(path: str, **kwargs):
 
     """
     # keys = ('mmap_mode', 'allow_pickle', 'fix_imports', 'encoding')
-    keys = ('mmap_mode', 'allow_pickle')  # , 'fix_imports', 'encoding')
-    return np.load(path, **{k: kwargs.get(k) for k in keys if kwargs.get(k) is not None})
+    _kwargs = {'fix_imports': True, 'allow_pickle': True}
+    _kwargs.update({kwargs.get(k) for k in frozenset(_kwargs).intersection(kwargs)})
+    return np.load(path, **_kwargs)
 
 
 def _save_log(data: List[str], path: str, append: bool = False, **kwargs):

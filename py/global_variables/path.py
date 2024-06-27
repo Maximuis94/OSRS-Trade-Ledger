@@ -12,17 +12,13 @@ Folders outside the project's folder structure require to be specified by the us
 # TODO: Remove unused paths
     Should be evaluated once the project is up and running
 """
-import time
 import os
 import pickle
+import time
 from typing import Dict
 
 import setup.user_config as user_config
-
-import pandas as pd
-
-from file.file import File
-from file.util import _get_protocol
+from file.file import File, _get_protocol
 
 t_ = time.perf_counter()
 
