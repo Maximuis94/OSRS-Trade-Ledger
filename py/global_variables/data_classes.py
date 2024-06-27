@@ -88,10 +88,10 @@ ExeLogEntry = namedtuple('ExeLogEntry', ['transaction_id', 'timestamp', 'price',
 
 RbpiDb = namedtuple('RbpiDb', ['path', 'table'])
 rbpi_dbs = {
-    'avg5m': RbpiDb(gp.f_rbpi_db_avg5m, 'avg5m'),
-    'realtime': RbpiDb(gp.f_rbpi_db_realtime, 'realtime'),
-    'wiki': RbpiDb(gp.f_rbpi_db_wiki, 'wiki'),
-    'item': RbpiDb(gp.f_rbpi_db_item, 'itemdb')
+    'avg5m': RbpiDb(gp.f_db_rbpi_avg5m, 'avg5m'),
+    'realtime': RbpiDb(gp.f_db_rbpi_realtime, 'realtime'),
+    'wiki': RbpiDb(gp.f_db_rbpi_wiki, 'wiki'),
+    'item': RbpiDb(gp.f_db_rbpi_item, 'itemdb')
 }
 
 

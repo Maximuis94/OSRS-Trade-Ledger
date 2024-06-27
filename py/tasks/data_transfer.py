@@ -305,6 +305,7 @@ def parse_tables(db_to: sqlite3.Connection, db_dict: dict = rbpi_dbs, t0: int = 
                             except ValueError:
                                 ...
                 except sqlite3.Error as e:
+                # except WindowsError:
                     print(f' Sqlite3 error occurred while executing {sql}\n\tParameters: {row}\n\t{e}')
             db_to.commit()
         row_str = ""
@@ -322,10 +323,10 @@ def timeseries_transfer(path: str = gp.f_db_timeseries):
         _ = input('Press ENTER to close')
         exit(1)
     print(f' [{fmt.dt_(fmt_str="%d-%m %H:%M:%S")}] Importing data from the Raspberry Pi...')
-    timeseries_database = Database(path)
+    timeseries_database = Database(path, read_only=False)
     print(f' Transferring batches...')
     t_ = time.perf_counter()
-    min_table_ts = batch_transfer(db_to=timeseries_database)
+    min_table_ts = batch_transfer(db_to=timeseries_database)#, min_ts=int(time.time()-14400*4))
     print(f'\tTransferred batches in {fmt.delta_t(time.perf_counter()-t_)}\n')
     
     print(f' Transferring Raspberry Pi Sqlite rows...')

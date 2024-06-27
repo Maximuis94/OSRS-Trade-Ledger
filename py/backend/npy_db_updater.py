@@ -8,7 +8,7 @@ import sqlite3
 import time
 import warnings
 from collections import namedtuple
-from collections.abc import Iterable, Sequence
+from collections.abc import Iterable, Sequence, Sized
 from typing import Tuple, List
 from warnings import warn
 
@@ -25,6 +25,7 @@ import util.str_formats as fmt
 import util.unix_time as ut
 from controller.item import create_item, Item
 from data_processing.npy_array_computations import avg_price_summed_volume
+from file.file import File
 from global_variables.data_classes import NpyDatapoint as NpyDp
 from model.database import Database
 
@@ -46,13 +47,13 @@ class NpyDbUpdater(Database):
     npy_columns = NpyDatapoint.__match_args__
     array_directory = gp.dir_npy_arrays
     
-    def __init__(self, db_path: str = gp.f_db_npy, source_db_path: str = gp.f_db_timeseries, new_db: bool = False,
-                 item_ids: Sequence = go.npy_items, prices_listbox_path: str = gp.f_prices_listbox, execute_update: bool = True, add_arrays: bool = True, **kwargs):
+    def __init__(self, db_file: File = gp.f_db_npy, source_db_path: str = gp.f_db_timeseries, new_db: bool = False,
+                 item_ids: Sequence = go.npy_items, prices_listbox_file: File = gp.f_prices_listbox, execute_update: bool = True, add_arrays: bool = True, **kwargs):
         
-        if new_db and os.path.exists(db_path):
-            os.remove(db_path)
+        if new_db and db_file.exists():
+            db_file.delete()
         
-        super().__init__(path=db_path, parse_tables=False)
+        super().__init__(path=db_file.path, parse_tables=False)
         self.add_npy_array_files = add_arrays
         
         if kwargs.get('dp') is not None:
@@ -101,17 +102,19 @@ class NpyDbUpdater(Database):
             self.ts_con_avg5m
         ]
         try:
-            self.db_size_start = os.path.getsize(self.db_path)
+            self.db_size_start = self.fsize()
+            if self.db_size_start is None:
+                self.db_size_start = File(self.path).fsize()
         except FileNotFoundError:
             self.db_size_start = 0
         self.t0, self.t1, self.timestamps, self.t_start = 0, 0, [], time.perf_counter()
         self.configure_default_timestamps()
         self.item_ids = item_ids
 
-        self.prices_listbox_path = prices_listbox_path
-        if prices_listbox_path is not None:
+        self.prices_listbox_file = prices_listbox_file
+        if prices_listbox_file is not None:
             try:
-                self.prices_listbox = uf.load(self.prices_listbox_path)
+                self.prices_listbox = self.prices_listbox_file.load()
                 self.updated_listbox = False
                 if not isinstance(self.prices_listbox, dict):
                     self.prices_listbox = {}
@@ -154,15 +157,23 @@ class NpyDbUpdater(Database):
     def updater_print(self, idx, n_items, n_rows, n_deleted, n_created, exe_times_item):
         """ Print a progress update while generating the database """
         n_tables = f"New tables: {n_created}  " if n_created > 0 else ""
-        if len(exe_times_item) > 0:
-            print(f'\t[{fmt.delta_t(time.perf_counter() - self.t_start)}] Items: {idx + 1}/{n_items}  '
-                  f'Db size: +{fmt.fsize(os.path.getsize(self.db_path) - self.db_size_start)}  '
-                  f'Rows [+ {n_rows} / - {n_deleted}]  {n_tables}'
-                  f'Avg/item: {fmt.delta_t(sum(exe_times_item) / len(exe_times_item))}', end='\r')
-        else:
-            print(f'\t[{fmt.delta_t(time.perf_counter() - self.t_start)}] Items: {idx + 1}/{n_items}  '
-                  f'Db size: +{fmt.fsize(os.path.getsize(self.db_path) - self.db_size_start)}  '
-                  f'Rows [+ {n_rows} / - {n_deleted}]  {n_tables}', end='\r')
+        try:
+            if len(exe_times_item) > 0:
+                print(f'\t[{fmt.delta_t(time.perf_counter() - self.t_start)}] Items: {idx + 1}/{n_items}  '
+                      f'Db size: +{fmt.fsize(self.fsize() - self.db_size_start)}  '
+                      f'Rows [+ {n_rows} / - {n_deleted}]  {n_tables}'
+                      f'Avg/item: {fmt.delta_t(sum(exe_times_item) / len(exe_times_item))}', end='\r')
+            else:
+                print(f'\t[{fmt.delta_t(time.perf_counter() - self.t_start)}] Items: {idx + 1}/{n_items}  '
+                      f'Db size: +{fmt.fsize(self.fsize() - self.db_size_start)}  '
+                      f'Rows [+ {n_rows} / - {n_deleted}]  {n_tables}', end='\r')
+        except TypeError as e:
+            for k, v in self.__dict__.items():
+                if isinstance(v, Sized) and len(v) > 100:
+                    print(k, len(v))
+                else:
+                    print(k, v)
+            raise e
     
     def generate_db(self, item_ids: Sequence = go.npy_items, t0: int = None, t1: int = None):
         """
@@ -333,8 +344,8 @@ class NpyDbUpdater(Database):
             # print(self.sql.get('fetch_wiki'))
     
     def save_prices_listbox(self):
-        if self.prices_listbox_path is not None and self.updated_listbox:
-            uf.save(self.prices_listbox, self.prices_listbox_path)
+        if self.prices_listbox_file is not None and self.updated_listbox:
+            self.prices_listbox_file.save(self.prices_listbox)
             self.updated_listbox = False
     
     def generate_rows(self, item_id: int = None, t0: int = None, t1: int = None):
@@ -411,7 +422,7 @@ class NpyDbUpdater(Database):
         """ Generate arrays with data of `item_id` and export them to a npy file in the array directory. """
         if not os.path.exists(self.array_directory):
             raise FileNotFoundError(f"Unable to export array files to non-existent directory {self.array_directory}")
-        if not overwrite and os.path.exists(self.array_file(item_id)):
+        if not overwrite and self.array_file(item_id).exists():
             return
         self.update_item_id(item_id=item_id)
         global cols, ar
@@ -428,21 +439,21 @@ class NpyDbUpdater(Database):
             # ar, cols = avg_price_summed_volume(ar, cols, 288, '1d')
             if generate_csv:
                 pd.DataFrame(ar, columns=cols).to_csv(gp.dir_data+'test.csv')
-            if not os.path.exists(self.column_file) or time.time()-os.path.getmtime(self.column_file) > 3600:
-                uf.save(cols, self.column_file)
+            if not self.column_file.exists() or time.time()-self.column_file.mtime() > 3600:
+                self.column_file.save(cols)
             self.save_arrays(ar, cols, item_id)
     
-    def array_file(self, item_id):
+    def array_file(self, item_id) -> File:
         """ Return the path to the array file with data for `item_id` """
-        return f'{self.array_directory}{item_id:0>5}.npy'
+        return File(f'{self.array_directory}{item_id:0>5}.npy')
         
     def save_arrays(self, arrays: np.ndarray, column_names: Iterable[str], item_id: int):
         """ Save `arrays` with corresponding `column_names` for `item_id` under the appropriate file name """
-        return uf.save((column_names, arrays), self.array_file(item_id))
+        return self.array_file(item_id).save((column_names, arrays))
         
     def load_arrays(self, item_id: int) -> Tuple[np.ndarray, Iterable[str]]:
         """ Load the array file with data for `item_id` """
-        column_names, arrays = uf.load(self.array_file(item_id))
+        column_names, arrays = self.array_file(item_id).load()
         return column_names, arrays
     
     def generate_remaining_arrays(self, item_ids):
@@ -506,21 +517,22 @@ class NpyDbUpdater(Database):
             return NpyDbUpdater.NpyDatapoint(*row[:len(NpyDbUpdater.npy_columns)])
     
     @staticmethod
-    def generate_template_db(path: str = gp.dir_template+'npy.db'):
+    def generate_template_db(file: File = gp.dir_template + 'npy.db'):
         """ Generate a template db+npy file, which has one table, to get an impression of what the db looks like. """
         dp = namedtuple('NpyDatapoint', list(NpyDbUpdater.NpyDatapoint.__match_args__) + ['src', 'price', 'volume'])
-        
-        if os.path.exists(path) and os.path.getsize(path) > pow(10, 7):
-            raise FileExistsError(f'File already exists at {path}. Are you sure you want to create a template db here?')
-        db = NpyDbUpdater(path, new_db=False, item_ids=[2], execute_update=True, add_arrays=False, dp=dp)
+        if not isinstance(file, File):
+            file = File(file)
+        if file.exists() and file.fsize() > pow(10, 7):
+            raise FileExistsError(f'File already exists at {file}. Are you sure you want to create a template db here?')
+        db = NpyDbUpdater(file, new_db=False, item_ids=[2], execute_update=True, add_arrays=False, dp=dp)
         db.commit()
         db.close()
-        db = NpyDbUpdater(path, execute_update=False, new_db=False)
+        db = NpyDbUpdater(file, execute_update=False, new_db=False)
         db.generate_npy_array(2)
         db.execute("ALTER TABLE item00002 RENAME TO ___")
         db.commit()
         db.close()
-        shutil.copy2(db.array_directory+'00002.npy', os.path.dirname(path)+'/___.npy')
+        shutil.copy2(db.array_directory +'00002.npy', os.path.dirname(file) + '/___.npy')
     
     @override
     def vacuum(self, temp_file: str = None, verify_vacuumed_db: bool = True, remove_temp_file: bool = True):

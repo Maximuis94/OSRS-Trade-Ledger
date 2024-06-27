@@ -15,15 +15,14 @@ as key, which means all keys are converted to strings before outputting the file
 produce strings as well.
 """
 import json
-import pickle
 import os
+import pickle
 from collections import namedtuple
 from enum import Enum
-from typing import Callable
+from typing import Callable, List, Dict
 
 import numpy as np
-
-import global_variables.path as gp
+import pandas as pd
 
 basic_keys = int, float, str, bool, None
 
@@ -271,6 +270,99 @@ def _load_npy(path: str, **kwargs):
     return np.load(path, **{k: kwargs.get(k) for k in keys if kwargs.get(k) is not None})
 
 
+def _save_log(data: List[str], path: str, append: bool = False, **kwargs):
+    """
+    Save textual `data` at path `path` using builtin methods
+    
+    Parameters
+    ----------
+    data : np.ndarray
+        The numpy array that is to be saved
+    path : str
+        The location `data` should be saved at
+    append : bool, optional, False by default
+        If True, append the file instead of replacing the existing file
+    
+    Other Parameters
+    ----------------
+    ...
+    """
+    with open(path, ('a' if append else 'w')) as log_file:
+        for line in data:
+            log_file.write(line + ('' if line.endswith('\n') else '\n'))
+
+
+def _load_log(path: str, min_line_length: int = None, **kwargs) -> List[str]:
+    """
+    Load the log file at `path` and return it as a list of strings. The newline character at the end of a line is not
+    included in the output.
+    
+    Parameters
+    ----------
+    path : str
+        Location of the file that is to be loaded
+    min_line_length : int, optional, None by default
+        If passed, line should be at least this many characters long in order to be included in the output.
+    
+    Other Parameters
+    ----------------
+    
+    Returns
+    -------
+    List[str]
+        A list of individual parsed lines
+
+    """
+    output = []
+    with open(path, 'r') as log_file:
+        for line in log_file.readlines():
+            if min_line_length is None or len(line) >= min_line_length:
+                output.append(line.rstrip('\n'))
+    return output
+
+
+def _save_csv(data: List[Dict[str, any]], path: str, **kwargs):
+    """
+    Save textual `data` at path `path` using builtin methods
+    
+    Parameters
+    ----------
+    data : np.ndarray
+        The numpy array that is to be saved
+    path : str
+        The location `data` should be saved at
+    
+    Other Parameters
+    ----------------
+    ...
+    """
+    ...
+
+
+def _load_csv(path: str, **kwargs) -> List[Dict[str, any]]:
+    """
+    Load the log file at `path` and return it as a list of strings. The newline character at the end of a line is not
+    included in the output.
+    
+    Parameters
+    ----------
+    path : str
+        Location of the file that is to be loaded
+    cell_parser : Callable, optional, None by default
+        If passed, use this method to format each cell
+    
+    Other Parameters
+    ----------------
+    
+    Returns
+    -------
+    List[Dict[str, any]
+        A list of individual parsed lines
+
+    """
+    return pd.DataFrame(path).to_dict('records')
+
+
 _io = namedtuple('IO', ['load', 'save', 'extension'])
 
 
@@ -283,9 +375,11 @@ class IOProtocol(Enum):
     PICKLE = _io(load=_load_pickle, save=_save_pickle, extension='.dat')
     JSON = _io(load=_load_json, save=_save_json, extension='.json')
     NPY = _io(load=_load_npy, save=_save_npy, extension='.npy')
+    LOG = _io(load=_load_log, save=_save_log, extension='.log')
+    CSV = _io(load=_load_csv, save=_save_csv, extension='.csv')
 
 
-def _get_protocol(data=None, path: str = '') -> IOProtocol:
+def _get_protocol(data=None, path: str = '') -> IOProtocol or None:
     """ Determine the most suitable protocol for importing/exporting `data` to `path` and return it """
     if path.endswith('.json'):
         return IOProtocol.JSON
@@ -296,7 +390,17 @@ def _get_protocol(data=None, path: str = '') -> IOProtocol:
     if isinstance(data, np.ndarray) or path.endswith('.npy'):
         return IOProtocol.NPY
     
-    raise ValueError(f'Unable to deduce a IOProtocol from path {path}')
+    if path.endswith('.csv'):
+        return IOProtocol.CSV
+    
+    if path.endswith('.log'):
+        return IOProtocol.LOG
+    
+    if path.endswith('.txt'):
+        return IOProtocol.LOG
+    
+    # raise ValueError(f'Unable to deduce a IOProtocol from path {path}')
+    return None
 
 
 def save(data, path, force_extension: bool = True, overwrite: bool = True, protocol: IOProtocol = None,
@@ -326,7 +430,7 @@ def save(data, path, force_extension: bool = True, overwrite: bool = True, proto
     
     """
     protocol = _get_protocol(data, path).value if protocol is None else protocol.value
-    print(f'Saving {data} with protocol {protocol}')
+    # print(f'Saving {data} with protocol {protocol}')
 
     try:
         if overwrite or not overwrite and not os.path.exists(path):
@@ -359,7 +463,7 @@ def load(path, force_extension: bool = True, protocol: IOProtocol = None, except
 
     """
     protocol = _get_protocol(None, path).value if protocol is None else protocol.value
-    print(f'Loading file from {path} with protocol {protocol}')
+    # print(f'Loading file from {path} with protocol {protocol}')
     
     try:
         return protocol.load(set_ext(path, protocol.extension) if force_extension else path, **kwargs)

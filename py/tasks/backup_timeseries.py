@@ -294,7 +294,7 @@ def create_backup(db: str or TimeseriesDB = gp.f_db_timeseries, backup_directory
     threads = []
     for thread_id in range(n_threads + 1):
         if thread_id != n_threads:
-            _thread = ExtractRowAsyncTask(db.db_path, backup_dir=backup_directory,
+            _thread = ExtractRowAsyncTask(db.path, backup_dir=backup_directory,
                                           item_ids=[i for idx, i in enumerate(item_ids) if idx % n_threads == thread_id])
         else:
             global start_time

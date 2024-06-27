@@ -52,12 +52,13 @@ from overrides import override
 import global_variables.data_classes
 import sqlite.row_factories as factories
 import util.verify as verify
+from file.file import IFile
 from model.table import Column, Table
 from util.data_structures import *
 from util.sql import *
 
 
-class Database(sqlite3.Connection):
+class Database(sqlite3.Connection, IFile):
     """
     Class that represents a sqlite database.
     
@@ -67,12 +68,20 @@ class Database(sqlite3.Connection):
     The Database model class also contains some native sqlite methods for getting certain properties of the connected
     database, e.g. count_rows, get_min/get_max
     """
-    def __init__(self, path: str, tables: Table or Iterable = None, row_factory: Callable = dict_factory,
+    def __init__(self, path: str or File, tables: Table or Iterable = None, row_factory: Callable = dict_factory,
                  parse_tables: bool = None, read_only: bool = True, **kwargs):
+        if isinstance(path, File):
+            path = path.path
         # Open db in read-only mode
-        self.db_path = path
-        self.database_arg = f"file:{path}?mode=ro" if read_only else path
-        super().__init__(database=self.database_arg, uri=read_only)
+        try:
+            self.database_arg = f"file:{path}?mode=ro" if read_only else path
+            super().__init__(database=self.database_arg, uri=read_only)
+        except sqlite3.OperationalError as e:
+            if 'invalid uri authority' in str(e):
+                self.database_arg, read_only = path, False
+                super().__init__(database=path, uri=False)
+        super().__init__(path)
+        self.__dict__.update(File(path).__dict__)
         self.row_factory = row_factory
         self.tables, self.cursors = {}, {}
 
@@ -142,11 +151,12 @@ class Database(sqlite3.Connection):
                     return c.execute(*args, **kwargs)
             else:
                 return super().execute(*args, **kwargs)
+        # except WindowsError as e:
         except sqlite3.Error as e:
             if len(args) == 0:
                 args = [kwargs.get(k) for k in ['sql', 'parameters']]
                 
-            print(f'Error while executing {args[0]}')
+            print(f'Error while executing {args[0]} in db {self.path}')
             if len(args) >= 2:
                 print('Parameters:', args[1])
             else:
@@ -186,7 +196,7 @@ class Database(sqlite3.Connection):
     
     def write_con(self) -> sqlite3.Connection:
         """ Return a sqlite3 connection to this database that can be used for writing operations """
-        return sqlite3.connect(self.db_path)
+        return sqlite3.connect(self.path)
     
     def add_table(self, table: Table):
         """ Add Table `table` to this Database. An existing table with the same name will be overwritten. """
@@ -201,7 +211,7 @@ class Database(sqlite3.Connection):
         else:
             self.con_exe_com(sql_create)
         self.close()
-        super().__init__(self.db_path)
+        super().__init__(self.path)
     
     def create_tables(self, tables: str or Table or Iterable = None, hush: bool = False, if_not_exists: bool = False,
                       sqls: Iterable[str] = None):
@@ -224,7 +234,7 @@ class Database(sqlite3.Connection):
             for s in sqls:
                 if not s[:12] != 'CREATE TABLE':
                     raise ValueError(f"Executable {s} is not a CREATE TABLE statement")
-            con = sqlite3.connect(self.db_path)
+            con = sqlite3.connect(self.path)
             for sql in sqls:
                 con.execute(sql)
             con.commit()
@@ -277,7 +287,7 @@ class Database(sqlite3.Connection):
                 continue
             columns = []
             
-            if not parse_full and _table.name not in table_filter:
+            if not parse_full and table_filter is not None and _table.name not in table_filter:
                 continue
                 
             for column in self.execute(f"PRAGMA table_info('{_table.name}')").fetchall():
@@ -292,14 +302,15 @@ class Database(sqlite3.Connection):
                 ))
             if parse_one:
                 s = ''
-                for _char in table.name:
+                for _char in _table.name:
                     if not _char.isdigit():
                         s += _char
                     else:
                         s += '_'
-                _table.name = s
-            self.tables[_table.name] = Table(table_name=_table.name, columns=columns, foreign_keys=[],
-                                             db_file=self.db_path)
+            else:
+                s = _table.name
+            self.tables[_table.name] = Table(table_name=s, columns=columns, foreign_keys=[],
+                                             db_file=self.path)
             if parse_one:
                 return
     
@@ -312,7 +323,7 @@ class Database(sqlite3.Connection):
         if isinstance(rows, dict):
             rows = [rows]
         table = self.tables.get(table_name)
-        con = sqlite3.connect(database=self.db_path)
+        con = sqlite3.connect(database=self.path)
         sql = table.insert_replace_dict if replace else table.insert_dict
         if prt:
             print(sql)
@@ -462,11 +473,11 @@ class Database(sqlite3.Connection):
         t_ = time.perf_counter()
         
         if temp_file is None:
-            f, ext = os.path.splitext(self.db_path)
+            f, ext = os.path.splitext(self.path)
             temp_file = f'{f}_{ext}'
 
         # First check if there is sufficient disk space available
-        if not verify.disk_space(temp_file, os.path.getsize(self.db_path)):
+        if not verify.disk_space(temp_file, self.fsize()):
             warnings.warn(RuntimeWarning(f'Did not start Database VACUUM operation as there appears to be insufficient '
                                          f'free disk space. Consider setting `temp_file` to a different disk or freeing'
                                          f' up some space.'))
@@ -486,13 +497,13 @@ class Database(sqlite3.Connection):
         # VACUUM succeeded; close this db -> remove old file -> rename VACUUMed db -> re-initialize this object
         if identical:
             self.close()
-            os.remove(self.db_path)
-            shutil.copy2(temp_file, self.db_path)
+            self.delete()
+            shutil.copy2(temp_file, self.path)
             if remove_temp_file:
                 os.remove(temp_file)
-            self.__init__(path=self.db_path, parse_tables=False, **{k: v for k, v in self.__dict__.items()
-                                                if k in ('tables', 'row_factory', 'read_only')})
-            print(f'Database at {self.db_path} was vacuumed in {fmt.delta_t(time.perf_counter()-t_)}')
+            self.__init__(path=self.path, parse_tables=False, **{k: v for k, v in self.__dict__.items()
+                                                                 if k in ('tables', 'row_factory', 'read_only')})
+            print(f'Database at {self.path} was vacuumed in {fmt.delta_t(time.perf_counter() - t_)}')
         
         # VACUUM failed somehow, remove resulting file
         else:
@@ -500,6 +511,10 @@ class Database(sqlite3.Connection):
             print('Database VACUUM was not completed successfully...')
             os.remove(temp_file)
         return identical
+    
+    @override
+    def fsize(self) -> int:
+        return os.path.getsize(self.path)
 
 
 if __name__ == '__main__':

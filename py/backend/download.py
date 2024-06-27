@@ -54,9 +54,9 @@ def realtime_prices(check_rbpi: bool = False, force_rbpi: bool = False) -> dict:
     
     #
     try:
-        if (check_rbpi or force_rbpi) and time.time() - os.path.getmtime(gp.f_rbpi_rt) < cfg.rt_update_frequency:
+        if (check_rbpi or force_rbpi) and time.time() - gp.f_rbpi_rt.mtime() < cfg.rt_update_frequency:
             # print(f'loading data from rbpi')
-            data = uf.load(gp.f_rbpi_rt)
+            data = gp.f_rbpi_rt.load()
             # print(data)
     finally:
         if force_rbpi and data is None:

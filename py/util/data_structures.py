@@ -11,6 +11,7 @@ from typing import List, Type, Dict, Callable, NamedTuple, Tuple
 
 import global_variables.values as gv
 import global_variables.variables as var
+from file.file import File
 from global_variables.data_classes import TimeseriesRow, Avg5mDatapoint, RealtimeDatapoint, WikiDatapoint
 from util import str_formats as fmt
 
@@ -27,7 +28,7 @@ def dict_factory(sqlite_cursor: sqlite3.Cursor, row) -> dict:
     return {col[0]: row[idx] for idx, col in enumerate(sqlite_cursor.description)}
 
 
-def connect(db_file: str, set_row_factory: bool = True, prt: bool = False) -> sqlite3.Connection:
+def connect(db_file: File, set_row_factory: bool = True, prt: bool = False) -> sqlite3.Connection:
     """
     Connect with the sqlite database specified by `db_file`. The database is assumed to exist; an error will be raised
     if it does not.
@@ -52,9 +53,9 @@ def connect(db_file: str, set_row_factory: bool = True, prt: bool = False) -> sq
         If `db_file` does not exist, a FileNotFoundError is raised.
 
     """
-    if not os.path.exists(db_file):
+    if not db_file.exists():
         raise FileNotFoundError(f'Unable to connect to non-existent db file {db_file}')
-    con = sqlite3.connect(db_file)
+    con = sqlite3.connect(db_file.path)
     if prt:
         print(f'Connected with sqlite database at {db_file}')
     if set_row_factory:

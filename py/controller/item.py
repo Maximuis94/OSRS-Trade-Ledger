@@ -229,7 +229,7 @@ def item_exists(item_id: int) -> bool:
 class ItemController(Database):
     path = gp.f_db_local
     tuple = var.Item
-    wiki = Database(gp.f_db_timeseries, read_only=True)
+    wiki = Database(path=gp.f_db_timeseries, read_only=True)
     
     def __init__(self, augment_items: bool = True, read_only: bool = False, **kwargs):
         if kwargs.get('path') is not None:

@@ -91,7 +91,7 @@ class RealtimePricesSnapshot(LocalFile, metaclass=SingletonMeta):
     @staticmethod
     def get_update_frequency() -> int:
         """ If an updated version of the snapshot can be downloaded from rbpi, update more frequently """
-        return cfg.rt_rbpi_update_frequency if os.path.exists(gp.f_rbpi_rt) else cfg.rt_update_frequency
+        return cfg.rt_rbpi_update_frequency if gp.f_rbpi_rt.exists() else cfg.rt_update_frequency
 
 
 rt_prices_snapshot = RealtimePricesSnapshot()

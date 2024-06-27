@@ -83,6 +83,7 @@ import numpy as np
 import pandas as pd
 
 import util.file as uf
+from file.file import File
 from model.item import Item
 from controller.item import remap_item, create_item
 
@@ -219,9 +220,9 @@ def process_current_log(src_file: str, out_dir: str, n_added: int = 0):
 """
 
 
-def update_submitted_lines(log_file: str = gp.f_submitted_lines_log, ts_threshold: int = int(time.time()) - 86400 * 3):
+def update_submitted_lines(log_file: File = gp.f_submitted_lines_log, ts_threshold: int = int(time.time()) - 86400 * 3):
     """ Remove all lines from the submitted lines log that are no longer relevant """
-    submitted_lines, temp_file = open(log_file, 'r').readlines(), log_file.replace('.log', '_.log')
+    submitted_lines, temp_file = open(log_file.path, 'r').readlines(), log_file.path.replace('.log', '_.log')
     filtered_lines, removed_lines = [], []
     print('Removing expired submitted lines...')
     
@@ -241,11 +242,11 @@ def update_submitted_lines(log_file: str = gp.f_submitted_lines_log, ts_threshol
             submission_log.write(next_line)
     
     # Overwrite log file
-    os.remove(log_file)
+    log_file.delete()
     os.rename(temp_file, log_file)
 
 
-def process_logs(queue_file: str = gp.f_exchange_log_queue, elog_dir: str = gp.dir_exchange_log, add_current: bool = True):
+def process_logs(queue_file: File = gp.f_exchange_log_queue, elog_dir: str = gp.dir_exchange_log, add_current: bool = True):
     """
     Process all completed log files in log_dir. In chronological order, log files are parsed and converted into
     objects. All parsed lines are reduced to numerical lists and exported to an archive as such.
@@ -253,7 +254,7 @@ def process_logs(queue_file: str = gp.f_exchange_log_queue, elog_dir: str = gp.d
 
     Parameters
     ----------
-    queue_file : str, optional, gp.f_transaction_queue by default
+    queue_file : File, optional, gp.f_transaction_queue by default
         File that contains a list with completed parsed transactions that are to be submitted into the sqlite db
     elog_dir : str, optional, gp.dir_exchange_log by default
         Folder within the project in which files related to the exchange log are stored
@@ -271,18 +272,18 @@ def process_logs(queue_file: str = gp.f_exchange_log_queue, elog_dir: str = gp.d
 
     """
     # Length the file name after completing the log, i.e. exchange_2023-12-21.log
-    to_do = [gp.dir_exchange_log_src + f for f in gp.get_files(src=gp.dir_exchange_log_src, extensions=['log']) if len(f) in len_log_file]
+    to_do = [File(gp.dir_exchange_log_src + f) for f in gp.get_files(src=gp.dir_exchange_log_src, extensions=['log']) if len(f) in len_log_file]
     if len(to_do) > 1:
         to_do.sort()
     if add_current:
         to_do.append(gp.f_runelite_exchange_log)
     queue_data = ['item_id', 'timestamp', 'is_buy', 'quantity', 'price']
     
-    if not os.path.exists(queue_file):
+    if not queue_file.exists():
         queue = []
-        uf.save(queue, queue_file)
+        queue_file.save(queue)
     else:
-        queue = uf.load(queue_file)
+        queue = queue_file.load()
         if not isinstance(queue, Sized):
             raise TypeError
         print(f'Loaded queue of length {len(queue)}')
@@ -293,17 +294,17 @@ def process_logs(queue_file: str = gp.f_exchange_log_queue, elog_dir: str = gp.d
         print(f'No new transactions were found to submit, aborting...')
         return False
     
-    if not os.path.exists(gp.f_submitted_lines_log):
+    if not gp.f_submitted_lines_log.exists():
         submitted_lines = []
     else:
-        submitted_lines = open(gp.f_submitted_lines_log, 'r').readlines()
+        submitted_lines = open(gp.f_submitted_lines_log.path, 'r').readlines()
     new_subs = []
     for log_file in to_do:
-        incomplete_log = log_file == gp.f_runelite_exchange_log
+        incomplete_log = log_file.path == gp.f_runelite_exchange_log.path
         # This is a list with all lines that have been parsed and will be archived at some point.
-        with open(log_file, 'r') as log:
+        with open(log_file.path, 'r') as log:
             n_added, as_npy = 0, []
-            dst_file, ext = elog_dir + 'archive/' + log_file.split('/')[-1], '.' + log_file.split('.')[-1]
+            dst_file, ext = elog_dir + 'archive/' + log_file.file, log_file.extension
             
             for next_line in log.readlines():
                 entry = ExchangeLogLine(parse_line(next_line))
@@ -315,26 +316,26 @@ def process_logs(queue_file: str = gp.f_exchange_log_queue, elog_dir: str = gp.d
                     n_added += 1
                 as_npy.append(entry.to_list(list_dtype='npy_int'))
             if n_added > 0:
-                uf.save(queue, gp.f_exchange_log_queue)
-                print(f'Saved queue with {n_added} new entries from {os.path.split(log_file)[1]}')
+                queue_file.save(queue)
+                print(f'Saved queue with {n_added} new entries from {log_file.file}')
             
             # TODO: Implement robust archiving system
             # Archive parsed lines as npy arrays and by simply moving the log to an archive dir
         
         # If file is exchange.log, save submitted lines to prevent duplicate subs
         if incomplete_log:
-            with open(gp.f_submitted_lines_log, 'a' if os.path.exists(gp.f_submitted_lines_log) else 'w') as sub_log:
+            with open(gp.f_submitted_lines_log.path, ('a' if gp.f_submitted_lines_log.exists() else 'w')) as sub_log:
                 for next_line in new_subs:
                     sub_log.write(next_line)
         
         # Only save npy arrays / logs if the log is completed
         else:
             np.save(file=dst_file.replace(ext, '.npy'), arr=np.array(as_npy))
-            os.rename(log_file, dst_file)
+            os.rename(log_file.path, dst_file)
     return True
 
 
-def submit_transaction_queue(queue_file: str = gp.f_exchange_log_queue, submit_data: bool = True, min_ts: int = None,
+def submit_transaction_queue(queue_file: File = gp.f_exchange_log_queue, submit_data: bool = True, min_ts: int = None,
                              csv_file: str = 'output/exchange_log_submissions.csv'):
     """
     Submit all transactions that have been queued so far in the queue file in chronological order to the sqlite
@@ -343,7 +344,7 @@ def submit_transaction_queue(queue_file: str = gp.f_exchange_log_queue, submit_d
 
     Parameters
     ----------
-    queue_file : str
+    queue_file : File
         File in which the submission queue is saved.
     submit_data : bool, optional, True by default
         True if submissions should be saved; flag for debugging purposes to verify results without altering local files
@@ -360,7 +361,7 @@ def submit_transaction_queue(queue_file: str = gp.f_exchange_log_queue, submit_d
                              f"processing the transaction queue...")
     
     update_ts = int(time.time())
-    q = pd.DataFrame(gp.load_data(queue_file))
+    q = pd.DataFrame(queue_file.load())
     submitted = []
     if len(q) > 0:
         q['item_id'] = q['item_id'].apply(lambda r: r if isinstance(r, int) else r.item_id)
@@ -413,7 +414,7 @@ def submit_transaction_queue(queue_file: str = gp.f_exchange_log_queue, submit_d
         if submit_data:
             con.commit()
             con.close()
-            uf.save(data=queue, path=queue_file)
+            queue_file.save(queue)
 
     uf.backup_localdb(db_path=gp.f_db_local, backup_dir=gp.dir_backup_localdb,
                       min_cooldown=cfg.localdb_backup_cooldown, max_backups=cfg.max_localdb_backups)
