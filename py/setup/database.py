@@ -17,11 +17,13 @@ import global_variables.variables as var
 import global_variables.configurations as cfg
 import sqlite.databases as sql_db
 import util.str_formats
+from file.file import File
+
 from model.database import Database
 from sqlite.executable_statements import create_index
 
 
-def setup_sqlite_db(local_path: str = None, timeseries_db_path: str = None, add_index: bool = False, hush: bool = False,
+def setup_sqlite_db(local_path: File = None, timeseries_db_path: File = None, add_index: bool = False, hush: bool = False,
                     **kwargs):
     """
     Setup the sqlite db designed for this project at path `db_file`.
@@ -70,15 +72,15 @@ def setup_sqlite_db(local_path: str = None, timeseries_db_path: str = None, add_
     prt = lambda s: (... if hush else print(s))
     new_db = kwargs.get('new_db')
     
-    if isinstance(local_path, str) and os.path.exists(local_path):
+    if local_path is not None and local_path.exists():
         if new_db:
-            os.remove(local_path)
+            local_path.delete()
         else:
             print(f"Unable to execute db setup for existing db {timeseries_db_path}")
             local_path = None
-    if isinstance(timeseries_db_path, str) and os.path.exists(timeseries_db_path):
+    if timeseries_db_path is not None and timeseries_db_path.exists():
         if new_db:
-            os.remove(timeseries_db_path)
+            timeseries_db_path.delete()
         else:
             print(f"Unable to execute db setup for existing db {timeseries_db_path}")
             timeseries_db_path = None
@@ -332,6 +334,10 @@ def create_timeseries_db(db_file: str, item_ids: Iterable):
 
 
 if __name__ == '__main__':
+    print(type(gp.f_db_sandbox))
+    db = sqlite3.connect(gp.f_db_sandbox)
+    print(db.execute("SELECT MAX(timestamp) FROM avg5m").fetchone())
+    exit(1)
     sqlite3.connect(gp.f_db_timeseries).execute("VACUUM")
     exit(1)
     setup_entity_db(force_setup=True)
@@ -363,4 +369,3 @@ if __name__ == '__main__':
         print(f'Aborting database setup...')
         time.sleep(5)
         exit(-1)
-    

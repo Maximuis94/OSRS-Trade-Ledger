@@ -5,10 +5,10 @@ Databases are composed via a set of Tables, which are in turn composed via a set
 The databases as they are defined here should correspond with the column orderings as implemented in sqlite.row
 """
 
-from global_variables.path import f_db_local, db_f_timeseries
+from global_variables.path import f_db_local, f_db_timeseries
 from model.table import Column, Table
 
-avg5m = Table(table_name='avg5m', db_file=db_f_timeseries,
+avg5m = Table(table_name='avg5m', db_file=f_db_timeseries,
               columns=[
                   Column(name='timestamp', is_primary_key=True),
                   Column(name='item_id', is_primary_key=True),
@@ -18,7 +18,7 @@ avg5m = Table(table_name='avg5m', db_file=db_f_timeseries,
                   Column(name='sell_volume', add_check=True)])
 
 
-realtime = Table(table_name='realtime', db_file=db_f_timeseries,
+realtime = Table(table_name='realtime', db_file=f_db_timeseries,
                  columns=[
                      Column(name='timestamp', is_primary_key=True),
                      Column(name='item_id', is_primary_key=True),
@@ -27,7 +27,7 @@ realtime = Table(table_name='realtime', db_file=db_f_timeseries,
                  ])
 
 
-wiki = Table(table_name='wiki', db_file=db_f_timeseries,
+wiki = Table(table_name='wiki', db_file=f_db_timeseries,
              columns=[
                  Column(name='timestamp', is_primary_key=True),
                  Column(name='item_id', is_primary_key=True),
