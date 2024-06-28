@@ -3,7 +3,6 @@ Executable module that is used to fill prices from src=1, 2 that are 0 for some 
 
 """
 
-import os
 import sqlite3
 import time
 from collections.abc import Iterable
@@ -13,10 +12,10 @@ import global_variables.osrs as go
 import global_variables.path as gp
 import global_variables.values as val
 import util.array as u_ar
-import util.str_formats as fmt
 import util.file as uf
+import util.str_formats as fmt
+from file.file import File
 from model.database import Database
-
 
 shutdown = False
 db_size_start = None
@@ -38,9 +37,9 @@ def commit_data(db: sqlite3.Connection, t_commit: int, done: Iterable, to_do: It
         return to_do, done, t_commit
 
 
-def fill_avg5m_zero_prices(db_file: str = gp.f_db_timeseries, cooldown: float = 3.0, commit_frequency_sec: int = 20,
+def fill_avg5m_zero_prices(db_file: File = gp.f_db_timeseries, cooldown: float = 3.0, commit_frequency_sec: int = 20,
                            item_ids: Iterable = go.most_traded_items, lb_ts: int = val.min_avg5m_ts_query_online,
-                           ub_ts: int = time.time(), skip_ids: Iterable = go.timeseries_skip_ids, progress_file: str = gp.dir_temp+'fill_avg5m_to_do.dat'):
+                           ub_ts: int = time.time(), skip_ids: Iterable = go.timeseries_skip_ids, progress_file: File = File(gp.dir_temp+'fill_avg5m_to_do.dat')):
     """
     Iterate over all items, collect timestamps from src=1 or 2 where price=0 and try to fill the missing data.
     
@@ -70,7 +69,7 @@ def fill_avg5m_zero_prices(db_file: str = gp.f_db_timeseries, cooldown: float = 
     global shutdown, db_size_start, last_print, n_inserts, t_commit
     t_commit = time.perf_counter() + commit_frequency_sec
     db = Database(db_file)
-    db_size_start = os.path.getsize(db_file)
+    db_size_start = db_file.fsize()
     
     if ub_ts is None:
         ub_ts = db.execute("""SELECT MAX(timestamp) FROM 'item00002' WHERE src IN (1, 2)""").fetchone()
@@ -85,9 +84,9 @@ def fill_avg5m_zero_prices(db_file: str = gp.f_db_timeseries, cooldown: float = 
     
     i, to_do, loaded_file = None, [], False
     p = (lb_ts, ub_ts)
-    if os.path.exists(progress_file):
+    if progress_file.exists():
         try:
-            to_do = uf.load(progress_file)
+            to_do = progress_file.load()
             loaded_file = True
             print(f'Resuming from loaded file at {progress_file}')
         except EOFError:
@@ -107,7 +106,7 @@ def fill_avg5m_zero_prices(db_file: str = gp.f_db_timeseries, cooldown: float = 
             except KeyboardInterrupt:
                 break
         to_do = u_ar.unique_values(_set=to_do, sort_ascending=True, return_type=tuple)
-        uf.save(to_do, progress_file)
+        progress_file.save(to_do)
     n = len(to_do)
     print(f"\n  * Gathered {n} different timestamps")
 
@@ -135,15 +134,14 @@ def fill_avg5m_zero_prices(db_file: str = gp.f_db_timeseries, cooldown: float = 
                         ...
             tpc = time.perf_counter()
             last_print = f" Timestamp #{idx+1}/{n}  {ts} {fmt.unix_(ts)}  N_inserts: {n_inserts}  " \
-                         f"File: +{fmt.fsize(os.path.getsize(db_file) - db_size_start)}{_}"
+                         f"File: +{fmt.fsize(db_file.fsize() - db_size_start)}{_}"
             print(last_print, end='\r')
             to_do, done, t_commit = commit_data(db, t_commit, ts_done, to_do, progress_file)
             
             time.sleep(max(.1, cooldown - (tpc - t_)))
     except KeyboardInterrupt:
         # Process was manually interrupted; save progress to `progress_file`
-        uf.save(u_ar.unique_values(frozenset(to_do).difference(ts_done), return_type=tuple, sort_ascending=True),
-                path=progress_file)
+        progress_file.save(u_ar.unique_values(frozenset(to_do).difference(ts_done), return_type=tuple, sort_ascending=True))
         shutdown = True
     finally:
         print('\n\n')
@@ -153,15 +151,15 @@ def fill_avg5m_zero_prices(db_file: str = gp.f_db_timeseries, cooldown: float = 
         db.close()
         
         # To-do list was fully completed and a previously created file exists
-        if not shutdown and os.path.exists(progress_file):
-            os.remove(progress_file)
+        if not shutdown and progress_file.exists():
+            progress_file.delete()
         print(f'Done! Runtime: {fmt.delta_t(time.perf_counter() - start)} | Inserts: {n_inserts} | '
-                  f'Db file size: +{fmt.fsize(os.path.getsize(db_file)-db_size_start)}')
+                  f'Db file size: +{fmt.fsize(db_file.fsize()-db_size_start)}')
         _ = input('Press ENTER to close')
         return
         
 
-def fill_missing_avg5m(db_file: str = gp.f_db_timeseries, cooldown: float = 3.0, commit_frequency_sec: int = 20,
+def fill_missing_avg5m(db_file: File = gp.f_db_timeseries, cooldown: float = 3.0, commit_frequency_sec: int = 20,
                        ref_id: int = go.most_traded_items, lb_ts: int = val.min_avg5m_ts, ub_ts: int = None,
                        skip_ids: Iterable = go.timeseries_skip_ids, fill_zeros: bool = True):
     """
@@ -190,7 +188,7 @@ def fill_missing_avg5m(db_file: str = gp.f_db_timeseries, cooldown: float = 3.0,
     """
     global db_size_start
     if db_size_start is None:
-        db_size_start = os.path.getsize(db_file)
+        db_size_start = db_file.fsize()
     
     db = Database(db_file, read_only=False)
     
@@ -240,7 +238,7 @@ def fill_missing_avg5m(db_file: str = gp.f_db_timeseries, cooldown: float = 3.0,
                     if _d.get('highPriceVolume') > 0:
                         db.execute(_s, (2, ts, _d.get('avgHighPrice'), _d.get('highPriceVolume')))
                         n_inserts += 1
-            print(f"{idx}/{n_ts}  Timestamp: {fmt.unix_(ts)}  N_inserts: {n_inserts}  File: +{fmt.fsize(os.path.getsize(db_file )-db_size_start)}{_}",
+            print(f"{idx}/{n_ts}  Timestamp: {fmt.unix_(ts)}  N_inserts: {n_inserts}  File: +{fmt.fsize(db_file.fsize()-db_size_start)}{_}",
                   end='\r')
             if tpc > t_commit:
                 db.commit()
@@ -249,7 +247,7 @@ def fill_missing_avg5m(db_file: str = gp.f_db_timeseries, cooldown: float = 3.0,
         db.commit()
         db.close()
         print(f'Done! Runtime: {fmt.delta_t(time.perf_counter() - start)} | '
-              f'Db file size: {fmt.fsize(os.path.getsize(db_file)-db_size_start)}')
+              f'Db file size: {fmt.fsize(db_file.fsize()-db_size_start)}')
         _ = input('Press ENTER to close')
         ...
 

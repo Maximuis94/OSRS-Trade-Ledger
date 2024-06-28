@@ -82,10 +82,15 @@ from collections.abc import Iterable, Sized
 import numpy as np
 import pandas as pd
 
+import global_variables.configurations as cfg
+import global_variables.osrs as go
+import global_variables.path as gp
 import util.file as uf
+import util.unix_time as ut
+from controller.item import remap_item, create_item
 from file.file import File
 from model.item import Item
-from controller.item import remap_item, create_item
+from model.transaction import Transaction
 
 # import global_values
 # import path
@@ -98,14 +103,6 @@ from controller.item import remap_item, create_item
 #     load_data, save_data, f_exchange_log_queue as f_transaction_queue, dir_exchange_log_src as dir_log_src, \
 #     dir_exchange_log, \
 #     f_submitted_lines_log
-
-import global_variables.path as gp
-import global_variables.osrs as go
-import global_variables.configurations as cfg
-
-import util.unix_time as ut
-
-from model.transaction import Transaction
 
 
 # Log each line that is parsed during this session with the same timestamp
@@ -336,7 +333,7 @@ def process_logs(queue_file: File = gp.f_exchange_log_queue, elog_dir: str = gp.
 
 
 def submit_transaction_queue(queue_file: File = gp.f_exchange_log_queue, submit_data: bool = True, min_ts: int = None,
-                             csv_file: str = 'output/exchange_log_submissions.csv'):
+                             csv_file: str or File = File('output/exchange_log_submissions.csv')):
     """
     Submit all transactions that have been queued so far in the queue file in chronological order to the sqlite
     database. The queue is inspected first, checking for duplicate files and such. Upon completion, the database is
@@ -354,6 +351,8 @@ def submit_transaction_queue(queue_file: File = gp.f_exchange_log_queue, submit_
         After submitting transactions to sqlite db, also submit them to this csv file for manual inspection
     """
     
+    if not isinstance(csv_file, File):
+        csv_file = File(csv_file)
     # Only process if all completed log data has been parsed and transferred!
     logs = [f for f in gp.get_files(src=gp.dir_exchange_log_src, extensions=['log']) if len(f) in len_log_file]
     if len(logs) > 0:
@@ -422,8 +421,8 @@ def submit_transaction_queue(queue_file: File = gp.f_exchange_log_queue, submit_
     # Export submissions to a readable csv file
     try:
         if csv_file is not None:
-            dat_file = csv_file.replace('.csv', '.dat')
-            if os.path.exists(csv_file):
+            dat_file = File(csv_file.replace('.csv', '.dat'))
+            if csv_file.exists():
                 df = pd.concat([pd.read_pickle(dat_file), pd.DataFrame([t.__dict__ for t in submitted])])
             else:
                 df = pd.DataFrame([t.__dict__ for t in submitted])
