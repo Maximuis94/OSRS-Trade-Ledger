@@ -47,12 +47,12 @@ class NpyDbUpdater(Database):
     npy_columns = NpyDatapoint.__match_args__
     array_directory = gp.dir_npy_arrays
     
-    def __init__(self, db_path: str = gp.f_db_npy, source_db_path: str = gp.f_db_timeseries, new_db: bool = False,
+    def __init__(self, db_path: File = gp.f_db_npy, source_db_path: str = gp.f_db_timeseries, new_db: bool = False,
                  item_ids: Sequence = go.npy_items, prices_listbox_path: File = gp.f_prices_listbox,
                  execute_update: bool = True, add_arrays: bool = True, **kwargs):
         
-        if new_db and os.path.exists(db_path):
-            os.remove(db_path)
+        if new_db and db_path.exists():
+            db_path.delete()
         
         super().__init__(path=db_path, parse_tables=False)
         self.add_npy_array_files = add_arrays
@@ -413,7 +413,7 @@ class NpyDbUpdater(Database):
         """ Generate arrays with data of `item_id` and export them to a npy file in the array directory. """
         if not os.path.exists(self.array_directory):
             raise FileNotFoundError(f"Unable to export array files to non-existent directory {self.array_directory}")
-        if not overwrite and os.path.exists(self.array_file(item_id)):
+        if not overwrite and self.array_file(item_id).exists():
             return
         self.update_item_id(item_id=item_id)
         global cols, ar
@@ -430,13 +430,13 @@ class NpyDbUpdater(Database):
             # ar, cols = avg_price_summed_volume(ar, cols, 288, '1d')
             if generate_csv:
                 pd.DataFrame(ar, columns=cols).to_csv(gp.dir_data+'test.csv')
-            if not os.path.exists(self.column_file) or time.time()-os.path.getmtime(self.column_file) > 3600:
-                uf.save(cols, self.column_file)
+            if not self.column_file.exists() or time.time()-self.column_file.mtime() > 3600:
+                self.column_file.save(cols)
             self.save_arrays(ar, cols, item_id)
     
-    def array_file(self, item_id):
+    def array_file(self, item_id) -> File:
         """ Return the path to the array file with data for `item_id` """
-        return f'{self.array_directory}{item_id:0>5}.npy'
+        return File(f'{self.array_directory}{item_id:0>5}.npy')
         
     def save_arrays(self, arrays: np.ndarray, column_names: Iterable[str], item_id: int):
         """ Save `arrays` with corresponding `column_names` for `item_id` under the appropriate file name """
@@ -508,11 +508,11 @@ class NpyDbUpdater(Database):
             return NpyDbUpdater.NpyDatapoint(*row[:len(NpyDbUpdater.npy_columns)])
     
     @staticmethod
-    def generate_template_db(path: str = gp.dir_template+'npy.db'):
+    def generate_template_db(path: File = File(gp.dir_template+'npy.db')):
         """ Generate a template db+npy file, which has one table, to get an impression of what the db looks like. """
         dp = namedtuple('NpyDatapoint', list(NpyDbUpdater.NpyDatapoint.__match_args__) + ['src', 'price', 'volume'])
         
-        if os.path.exists(path) and os.path.getsize(path) > pow(10, 7):
+        if path.exists() and path.fsize() > pow(10, 7):
             raise FileExistsError(f'File already exists at {path}. Are you sure you want to create a template db here?')
         db = NpyDbUpdater(path, new_db=False, item_ids=[2], execute_update=True, add_arrays=False, dp=dp)
         db.commit()

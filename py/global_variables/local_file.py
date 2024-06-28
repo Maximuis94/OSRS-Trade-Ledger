@@ -12,22 +12,14 @@ As updating this data almost always involves making a request, the LocalFile cla
 
 """
 import datetime
-import os.path
-import sqlite3
-import time
-from collections import namedtuple
 
-import pandas as pd
 from overrides import override
 
-import global_variables.path as gp
-import global_variables.configurations as cfg
-
 import backend.download as dl
+import global_variables.configurations as cfg
+import global_variables.path as gp
 from global_variables.classes import SingletonMeta
-from global_variables.variables import exception_msg_csv_dtypes, ExceptionRow
-
-from model.local_file import LocalFile, FlagFile, File
+from model.local_file import LocalFile, FlagFile
 
 debug = True
     
@@ -104,7 +96,7 @@ class ItemWikiMapping(LocalFile, metaclass=SingletonMeta):
     def __init__(self):
         super().__init__(path=gp.local_file_wiki_mapping, update_frequency=86400)
         # print(f'Setting up ItemWikiMapping...')
-        mt_dt, dtn = datetime.datetime.fromtimestamp(os.path.getmtime(self.path)), datetime.datetime.now()
+        mt_dt, dtn = datetime.datetime.fromtimestamp(self.mtime()), datetime.datetime.now()
         
         # Lower update threshold on thursdays past noon, due to increased likelihood of new items
         if dtn.isoweekday() == 4 and dtn.hour > 15 and \

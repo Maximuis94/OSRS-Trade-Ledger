@@ -4,13 +4,9 @@ Module with pre-defined osrs-related variables like item_id lists, item_id-item_
 
 
 """
-import os.path
 import sqlite3
 
-import global_variables.variables as gd
 import global_variables.path as gp
-import sqlite.row_factories as row_factory
-
 import util.osrs as uo
 
 # User agent passed when making certain http requests

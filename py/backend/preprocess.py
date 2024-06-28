@@ -2,16 +2,11 @@
 Module with various implementations for preprocessing transferred data.
 
 """
-import os.path
 import sqlite3
-import time
 from collections.abc import Iterable
 
-from model.database import Database
 import global_variables.path as gp
-import global_variables.osrs as go
-import util.str_formats as fmt
-import util.file as uf
+from model.database import Database
 
 
 def add_item_data(item_ids: int or Iterable, add_table: bool = False):
