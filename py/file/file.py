@@ -301,5 +301,13 @@ class IFile:
             Iterable with keywords that are to be removed from the dict
         """
         ...
+    
+    def split_ext(self) -> Tuple[str, str]:
+        """ Return this File's path as a tuple of the file path without extension and its extension (including .) """
+        ...
+    
+    def has_ext(self, ext: str) -> bool:
+        """ Return True if this file ends with extension `ext` """
+        ...
 
     

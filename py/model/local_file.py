@@ -8,10 +8,8 @@ the user to modify certain configs without altering the source code.
 
 Existing local files that are used are listed as global variables in global_values.path.
 """
-import datetime
 import os.path
 import pickle
-import shutil
 import time
 from abc import abstractmethod
 from collections.abc import Callable
@@ -19,13 +17,12 @@ from typing import List
 
 import numpy as np
 import pandas as pd
-from overrides import override
 
+import global_variables.path as gp
 import util.file as uf
 import util.unix_time as ut
-import global_variables.path as gp
-from global_variables.classes import SingletonMeta
 from file.file import File
+from global_variables.classes import SingletonMeta
 
 debug = True
 
@@ -186,7 +183,7 @@ class LocalFile(File):
     
     def should_update(self) -> bool:
         """ Return True if the file is eligible for updating or verification of data fails. """
-        return not os.path.exists(self.path) or \
+        return not self.exists() or \
             time.time() >= self.next_update
         
     def update(self, force_update: bool = False):
@@ -254,7 +251,7 @@ class FlagFile(File, metaclass=SingletonMeta):
         """ Return True if the process is marked as active, given the (non-)existing file """
         try:
             # lifespan exceeded -> remove the file as it is no longer active + return False
-            if time.time() - os.path.getmtime(self.path) > self.lifespan:
+            if time.time() - self.mtime() > self.lifespan:
                 self.delete()
                 return False
             return True
@@ -380,7 +377,6 @@ class NpyBatch(File):
         
     
 if __name__ == '__main__':
-    from global_variables.path import dir_batch
     # file = File(path=, read_only=False)
     print(uf.load(gp.dir_rbpi_dat+'batch_001.npy'))#, allow_pickle=True))
     ut.runtime(File, gp.dir_data+'test.dat', _n_trials=10)

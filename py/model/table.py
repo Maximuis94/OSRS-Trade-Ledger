@@ -14,13 +14,13 @@ of parameters. This is covered in more detail in the base Row class.
 
 The base class Row is also implemented by Table, which acts as the controller of a sqlite table.
 """
-import os
 import sqlite3
 from typing import Type, Tuple, Callable, Dict, List, Iterable
 
 import pandas as pd
 
 import util.data_structures as ud
+from file.file import File
 from global_variables import variables as var
 from global_variables.data_classes import *
 from sqlite.executable_statements import insert_sql_dict
@@ -39,7 +39,7 @@ class Column:
     """
     
     def __init__(self, name: str, is_primary_key: bool = False, is_unique: bool = False, is_nullable: bool = False,
-                 parent_table: str = None, db_file: str = None, add_check: bool = False, **kwargs):
+                 parent_table: str = None, db_file: File = None, add_check: bool = False, **kwargs):
         """
 
         Parameters
@@ -80,9 +80,9 @@ class Column:
         if parent_table is not None and db_file is not None:
             self.from_table(db_file=db_file, parent_table=parent_table)
             
-    def from_table(self, db_file: str, parent_table: str):
+    def from_table(self, db_file: File, parent_table: str):
         """ Extract column attributes from `parent_table` """
-        if os.path.exists(db_file):
+        if db_file.exists():
             try:
                 _con = sqlite3.connect(database=f'file:{db_file}?mode=ro', uri=True)
             except sqlite3.OperationalError:
@@ -281,7 +281,7 @@ class Table(Row):
     composed of 0 or more rows that are formatted similarly.
     """
 
-    def __init__(self, table_name: str, db_file: str, row_tuple: Type[tuple] = None, **kwargs):
+    def __init__(self, table_name: str, db_file: File, row_tuple: Type[tuple] = None, **kwargs):
         """
         
         Parameters
@@ -304,7 +304,7 @@ class Table(Row):
     def insert_row(self, row: tuple, c: (sqlite3.Connection, sqlite3.Cursor) = None, replace: bool = True):
         """ Insert values of `row` into this table """
         if c is None:
-            if self.db_file is None or not os.path.exists(self.db_file):
+            if self.db_file is None or not self.db_file.exists():
                 raise FileNotFoundError(f'No db file was configured for table {self.name}, not was a connection passed')
             c = sqlite3.connect(self.db_file)
             self.insert_row(row=row, c=c, replace=replace)

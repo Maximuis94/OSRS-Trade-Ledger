@@ -473,8 +473,7 @@ class Database(sqlite3.Connection, IFile):
         t_ = time.perf_counter()
         
         if temp_file is None:
-            f, ext = os.path.splitext(self.path)
-            temp_file = f'{f}_{ext}'
+            temp_file = File(f'{self.split_ext()[0]}_{self.extension}')
 
         # First check if there is sufficient disk space available
         if not verify.disk_space(temp_file, self.fsize()):
