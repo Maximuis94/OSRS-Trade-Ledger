@@ -21,6 +21,7 @@ import global_variables.path as gp
 import util.file as uf
 import util.sql as sql
 import util.str_formats as fmt
+from file.file import File
 from model.database import Database
 from model.timeseries import TimeseriesDB
 
@@ -172,22 +173,22 @@ class AsyncPrinter(threading.Thread):
 
 
 class ExtractRowAsyncTask(threading.Thread):
-    def __init__(self, db_file: str, backup_dir: str, callback_oncomplete: callable = None, item_ids: list = None, old: bool = False, **kwargs):
+    def __init__(self, db_file: File, backup_dir: str, callback_oncomplete: callable = None, item_ids: list = None, old: bool = False, **kwargs):
         threading.Thread.__init__(self, name=kwargs.get('name'), daemon=kwargs.get('daemon'))
         # self.task = task
         self.on_complete = callback_oncomplete
         self.string = ''
         self.item_ids = item_ids
         self.backup_dir = backup_dir
-        self.db_path = db_file
+        self.db_file = db_file
         self.srcs = kwargs.get('srcs')
         self.old = old
     
     def run(self):
         if self.old:
-            async_extract_rows_old(db_file=self.db_path, item_ids=self.item_ids, backup_dir=self.backup_dir, srcs=self.srcs)
+            async_extract_rows_old(db_file=self.db_file, item_ids=self.item_ids, backup_dir=self.backup_dir, srcs=self.srcs)
         else:
-            async_extract_rows(db=self.db_path, item_ids=self.item_ids, backup_dir=self.backup_dir)
+            async_extract_rows(db=self.db_file, item_ids=self.item_ids, backup_dir=self.backup_dir)
 
 
 def backup_item_data(db: Database, item_id: int, srcs: Iterable, backup_directory: str):
@@ -197,7 +198,7 @@ def backup_item_data(db: Database, item_id: int, srcs: Iterable, backup_director
                 path=f'{backup_directory}{src}/{item_id:0>5}.dat')
 
 
-def backup_db(db_file: str, backup_directory: str, n_threads: int = 4, item_ids: list = go.item_ids, srcs: Iterable = None,
+def backup_db(db_file: File, backup_directory: str, n_threads: int = 4, item_ids: list = go.item_ids, srcs: Iterable = None,
               max_mtime: int = 86400, **kwargs):
     """ Create a pickled backup of the database at `db_file`. Export rows to `backup_directory`
     Parameters
@@ -238,7 +239,8 @@ def backup_db(db_file: str, backup_directory: str, n_threads: int = 4, item_ids:
             _ids.append(i)
     # async_extract_rows(db_file=gp.f_db_timeseries_, item_ids=item_ids)
     active_threads = []
-    uf.save(db.execute("SELECT * FROM item00002 WHERE src=0", factory=dict).fetchone(), backup_directory+'example_row.dat')
+    uf.save(db.execute("SELECT * FROM item00002 WHERE src=0", factory=dict).fetchone(),
+            backup_directory+'example_row.dat')
     for thread_id in range(n_threads):
         t = ExtractRowAsyncTask(db_file=db_file,
                                 backup_dir=backup_directory,

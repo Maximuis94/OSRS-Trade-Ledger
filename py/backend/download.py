@@ -6,22 +6,20 @@ Used for downloading data, but also serves as reference for how the rbpi downloa
 Used as import backend.download as dl
 """
 import datetime
-import os.path
-import urllib.request
-import urllib.error
 import json
-from bs4 import BeautifulSoup
 import time
-import requests
+import urllib.error
+import urllib.request
 
+import requests
+from bs4 import BeautifulSoup
+
+import global_variables.configurations as cfg
 import global_variables.osrs as go
 import global_variables.path as gp
-import global_variables.configurations as cfg
 import global_variables.values as val
-import util.unix_time as ut
 import util.str_formats as fmt
-import util.file as uf
-
+import util.unix_time as ut
 
 _request_header = {
     'User-Agent': 'Homemade GE trading GUI/DB | Disc: Maximuis94'

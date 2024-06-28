@@ -26,6 +26,7 @@ import sqlite.row_factories
 import util.file as uf
 import util.str_formats as fmt
 from controller.item import ItemController, Item
+from file.file import File
 from global_variables.data_classes import TimeseriesRow, rbpi_dbs, Row
 from model.database import Database
 from util.data_structures import datapoint
@@ -37,7 +38,7 @@ src_ids = '', 'a', 'w', 'r'
 _t_commit = int(time.perf_counter() + cfg.data_transfer_commit_frequency)
 _t_print = int(time.perf_counter() + cfg.data_transfer_print_frequency)
 n_start = None
-ts_threshold = int(os.path.getctime(gp.f_db_timeseries))
+ts_threshold = int(gp.f_db_timeseries.ctime())
 
 
 def commit(_db: sqlite3.Connection, msg: str = None, force: bool = False, close_db: bool = False,
@@ -81,7 +82,7 @@ def convert_row(src: int, row: dict):
     raise ValueError
 
 
-def parse_batch(batch_path: str, out_file: str = None, dir_out: str = None) -> List[TimeseriesRow]:
+def parse_batch(batch_path: str or File, out_file: str = None, dir_out: str = None) -> List[TimeseriesRow]:
     """
     Parse a batch file and convert it into a list of TimeseriesRows. The input batch file is assumed to be a list of
     (datatype dicts, rows) tuples or two lists of datatype dicts and rows.
@@ -102,7 +103,9 @@ def parse_batch(batch_path: str, out_file: str = None, dir_out: str = None) -> L
     List[TimeseriesRow]
 
     """
-    batch, parsed = uf.load(batch_path), []
+    if isinstance(batch_path, str):
+        batch_path = File(batch_path)
+    batch, parsed = batch_path.load(), []
     min_ts, max_ts, track_ts = int(time.time()), 0, dir_out is not None and out_file is None
     n = 0
     try:
@@ -141,14 +144,16 @@ def parse_batch(batch_path: str, out_file: str = None, dir_out: str = None) -> L
     
     if track_ts:
         min_ts, max_ts = round(min_ts/14400, 0)*14400, round(max_ts/14400, 0)*14400
-        out_file = dir_out + f'{min_ts:.0f}_{max_ts:.0f}' + os.path.splitext(batch_path)[-1]
+        out_file = File(dir_out + f'{min_ts:.0f}_{max_ts:.0f}' + batch_path.extension)
     elif dir_out is not None:
-        out_file = dir_out + out_file
+        out_file = File(dir_out + out_file)
     if out_file is not None:
-        if os.path.exists(out_file) and len(uf.load(out_file)) != len(parsed):
+        if not isinstance(out_file, File):
+            out_file = File(out_file)
+        if out_file.exists() and len(out_file.load()) != len(parsed):
             raise FileExistsError
-        uf.save([row.tuple() for row in parsed], out_file)
-        if len(uf.load(out_file)) != len(parsed):
+        out_file.save([row.tuple() for row in parsed])
+        if len(out_file.load()) != len(parsed):
             raise RuntimeError(f"Something went wrong copying the file...")
         ...
     return parsed
@@ -186,8 +191,9 @@ def insert_batch(db: Database, batch_path: str, skip_ids: list = (9044, 9050, 26
         s += f'{src}: {_n}, '
     print(s+f'total: {n}')
     if remove_src:
-        os.remove(batch_path)
-        print(f'\t * Deleted source batch file {os.path.split(batch_path)[1]}')
+        batch_path = File(batch_path)
+        batch_path.delete()
+        print(f'\t * Deleted source batch file {batch_path.file}')
     
     return n
     
@@ -218,10 +224,11 @@ def batch_transfer(db_to: Database, min_ts: int = None):
     n_rows = {}
     print(f'\tInserting batches...')
     for batch_path in transferred_batches:
-        print(f" * Current file: DST/{batch_path.split('/')[-1]} (size={os.path.getsize(batch_path)/pow(10,6):.1f}mb)")
+        batch_path = File(batch_path)
+        print(f" * Current file: DST/{batch_path.split('/')[-1]} (size={batch_path.fsize()/pow(10,6):.1f}mb)")
         idx, t_ = 0, time.perf_counter()
-        n_rows[batch_path] = insert_batch(db=db_to, batch_path=batch_path, remove_src=True)
-        print(f'\tInserted {n_rows.get(batch_path)} rows from batch {os.path.split(batch_path)[1]} '
+        n_rows[batch_path] = insert_batch(db=db_to, batch_path=batch_path.path, remove_src=True)
+        print(f'\tInserted {n_rows.get(batch_path)} rows from batch {batch_path.file} '
               f'in {fmt.delta_t(time.perf_counter()-t_)}')
         
     n, srcs, repl = '', list(n_rows.keys()), [('realtime', 'rt'), ('sell', 's'), ('buy', 'b')]
