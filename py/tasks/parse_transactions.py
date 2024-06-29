@@ -570,6 +570,8 @@ def parse_logs():
         exit(1)
     submit_transaction_queue(submit_data=True)
     update_submitted_lines()
+    print(f"\nExecution complete! Time taken: {1000 * (time.time() - t):.0f}ms\nPress ENTER to close this screen")
+    time.sleep(60)
     
 
 
