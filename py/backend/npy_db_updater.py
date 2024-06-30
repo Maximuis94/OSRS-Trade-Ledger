@@ -110,33 +110,23 @@ class NpyDbUpdater(Database):
         self.configure_default_timestamps()
         self.item_ids = item_ids
 
-        self.prices_listbox_path = prices_listbox_path
-        if prices_listbox_path is not None:
-            try:
-                self.prices_listbox = uf.load(self.prices_listbox_path)
-                self.updated_listbox = False
-                if not isinstance(self.prices_listbox, dict):
-                    self.prices_listbox = {}
-                    self.updated_listbox = True
-            except FileNotFoundError:
-                self.prices_listbox = {}
-                self.updated_listbox = True
-        else:
-            self.updated_listbox = False
-            self.prices_listbox = None
-
         self.placeholder = [[0, 0]]
         print(f'\tNpy items: {len(item_ids)} Npy timespan was set to [{ut.loc_unix_dt(self.t0)} - '
               f'{ut.loc_unix_dt(self.t1)}]')
         if execute_update or new_db:
             # print(f'Created tables in {fmt.delta_t(time.perf_counter()-self.t_start)}')
             start_insert = time.perf_counter()
-            self.generate_db(item_ids=self.item_ids, t0=self.t0, t1=self.t1)
+            # self.generate_db(item_ids=self.item_ids, t0=self.t0, t1=self.t1)
             if self.add_npy_array_files:
                 self.generate_remaining_arrays(tuple(self.item_ids))
             # n_done = None
             # while n_done is None or n_done > 0:
             #     n_done = self.insert_row_data(start_idx=n_done)
+
+            self.prices_listbox_path, self.prices_listbox = prices_listbox_path, {}
+            if prices_listbox_path is not None:
+                self.update_listbox()
+            
             tpc = time.perf_counter()
             print(f'\n\tDone! Insert time: {fmt.delta_t(tpc-start_insert)} Total runtime: {fmt.delta_t(tpc-self.t_start)}')
         self.con = None
@@ -218,11 +208,8 @@ class NpyDbUpdater(Database):
                 if _t0 is not None and _t0 >= t1-300:
                     n_skipped += 1
                     self.updater_print(idx-n_skipped, n_items-n_skipped, n_rows, n_deleted, n_created, exe_times_item)
-                    self.update_prices_listbox_entry(item_id=item_id, n_rows=cfg.prices_listbox_days)
-                    
                     continue
-                # print(t0, _t0, t1)
-                # print(self.generate_rows_(item_id, _t0, t1))
+                
             item = create_item(item_id)
             if not isinstance(item, Item):
                 raise TypeError
@@ -274,12 +261,8 @@ class NpyDbUpdater(Database):
                         while len(params) < len(self.npy_columns):
                             params.append(0)
                         self.con.execute(sql_i, tuple(params))
-                        if self.prices_listbox is not None:
-                            self.update_prices_listbox_entry(item_id=item_id, n_rows=cfg.prices_listbox_days)
-                            self.updated_listbox = True
                 if item_rows > 0:
                     self.con.commit()
-                    self.save_prices_listbox()
                     if self.add_npy_array_files:
                         self.generate_npy_array(item_id)
                     exe_times_item.append(time.perf_counter()-item_start)
@@ -288,7 +271,6 @@ class NpyDbUpdater(Database):
                 if len(exe_times_item) % 10 > 1:
                     continue
             self.updater_print(idx-n_skipped, n_items-n_skipped, n_rows, n_deleted, n_created, exe_times_item)
-        self.save_prices_listbox()
             # for k, v in self.prices_listbox.items():
             #     print(k, v)
             
@@ -333,11 +315,7 @@ class NpyDbUpdater(Database):
             # print(self.sql['insert'])
             # exit(1)
             # print(self.sql.get('fetch_wiki'))
-    
-    def save_prices_listbox(self):
-        if self.prices_listbox_path is not None and self.updated_listbox:
-            self.prices_listbox_path.save(self.prices_listbox)
-            self.updated_listbox = False
+        
     
     def generate_rows(self, item_id: int = None, t0: int = None, t1: int = None):
         """ Generate rows for `item_id` with timestamps spanning from `t0` to `t1` """
@@ -567,6 +545,12 @@ class NpyDbUpdater(Database):
             return 1
         except PermissionError:
             return -1
+    
+    def update_listbox(self):
+        """ Update all prices listbox entries and save the result """
+        for item_id in self.item_ids:
+            self.update_prices_listbox_entry(item_id)
+        self.prices_listbox_path.save(self.prices_listbox)
 
     def update_prices_listbox_entry(self, item_id: int, n_rows: int = cfg.prices_listbox_days, n_intervals: int = 6):
         """
@@ -597,7 +581,6 @@ class NpyDbUpdater(Database):
         Sell prices are shown as the last interval for that row and the average across 3/6 highest sell prices across
         all intervals.
         """
-        
         if self.prices_listbox is None:
             return
         interval_start = self.execute(f"SELECT MAX(timestamp) FROM item{item_id:0>5}", factory=0).fetchone()-86100
