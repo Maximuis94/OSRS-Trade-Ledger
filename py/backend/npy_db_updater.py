@@ -46,15 +46,53 @@ class NpyDbUpdater(Database):
     NpyDatapoint = NpyDp
     npy_columns = NpyDatapoint.__match_args__
     array_directory = gp.dir_npy_arrays
+    sql_i = f"""INSERT OR REPLACE INTO ___{str(NpyDatapoint.__match_args__)}
+                            VALUES {str(tuple(['?' for _ in NpyDatapoint.__match_args__]))}""".replace("'", "")
+    sql_del_rows: str = """DELETE FROM ___ WHERE timestamp < ?"""
+    sql_count_del: str = f"""SELECT COUNT(*) FROM ___ WHERE timestamp < ?"""
+    sql_fetch_src_wiki: str = """SELECT ?, price, volume, MAX(timestamp) FROM ___ WHERE src=0 AND timestamp<?"""
+    sql_fetch_src_avg5m_buy: str = """SELECT price, volume, ? FROM ___ WHERE src=1 AND timestamp=?"""
+    sql_fetch_src_avg5m_sell: str = """SELECT price, volume, ? FROM ___ WHERE src=2 AND timestamp=?"""
+    sql_fetch_src_rt_buy: str = """SELECT price FROM ___ WHERE src=3 AND timestamp BETWEEN ? AND ?+299"""
+    sql_fetch_src_rt_sell: str = """SELECT price FROM ___ WHERE src=4 AND timestamp BETWEEN ? AND ?+299"""
+    sql_fetch_src_rt: str = """SELECT price FROM ___ WHERE src IN (3, 4) AND timestamp BETWEEN ? AND ?+299"""
+    sql_fetch_npy: str = """SELECT * FROM ___"""
+    sql_ts_start: str = """SELECT MAX(timestamp) FROM ___ """
     
-    def __init__(self, db_path: File = gp.f_db_npy, source_db_path: str = gp.f_db_timeseries, new_db: bool = False,
+    def __init__(self, db_path: File = gp.f_db_npy, source_db_path: str = gp.f_db_timeseries,
                  item_ids: Sequence = go.npy_items, prices_listbox_path: File = gp.f_prices_listbox,
                  execute_update: bool = True, add_arrays: bool = True, **kwargs):
+        """
         
-        if new_db and db_path.exists():
-            db_path.delete()
+        Parameters
+        ----------
+        db_path : File, optional, global_variables.path.f_db_npy by default
+            Database File
+        source_db_path : File, optional, global_variables.path.f_db_timeseries by default
+            Source database file
+        item_ids : Sequence, optional global_variables.osrs.npy_items by default
+            Sequence of item_ids that are included in the update
+        prices_listbox_path : File, optional, global_variables.path.f_prices_listbox by default
+            Path where the prices listbox file should be saved at. If set to None, it will skip the prices listbox
+            update.
+        execute_update : bool, optional, True by default
+            If True, start updater protocol in the constructor.
+        add_arrays : bool, optional, True by default
+            If True, add numpy arrays (obsolete -- TODO: check if it can be removed)
         
+        Other Parameters
+        ----------------
+        new_db : bool, optional, None by default
+            Flag that indicates whether a new database should be created. If True, this will instantly delete the
+            existing database.
+        
+        """
         super().__init__(path=db_path, parse_tables=False)
+        self.item_ids = item_ids
+        
+        if kwargs.get('new_db') is not None and kwargs.get('new_db') and db_path.exists():
+            self.new_db()
+        
         self.add_npy_array_files = add_arrays
         
         if kwargs.get('dp') is not None:
@@ -62,20 +100,9 @@ class NpyDbUpdater(Database):
             if len(self.NpyDatapoint.__match_args__) < len(self.npy_columns):
                 raise ValueError("dp can be passed to add additional columns, but this one seems to have less")
             self.npy_columns = self.NpyDatapoint.__match_args__
-
+        
         self.sql_c = f"""CREATE TABLE ___("""
-        self.sql_i = f"""INSERT OR REPLACE INTO ___{str(self.NpyDatapoint.__match_args__)}
-                        VALUES {str(tuple(['?' for _ in self.NpyDatapoint.__match_args__]))}""".replace("'", "")
-        self.sql_del_rows = """DELETE FROM ___ WHERE timestamp < ?"""
-        self.sql_count_del = f"""SELECT COUNT(*) FROM ___ WHERE timestamp < ?"""
-        self.sql_fetch_src_wiki = """SELECT ?, price, volume, MAX(timestamp) FROM ___ WHERE src=0 AND timestamp<?"""
-        self.sql_fetch_src_avg5m_buy = """SELECT price, volume, ? FROM ___ WHERE src=1 AND timestamp=?"""
-        self.sql_fetch_src_avg5m_sell = """SELECT price, volume, ? FROM ___ WHERE src=2 AND timestamp=?"""
-        self.sql_fetch_src_rt_buy = """SELECT price FROM ___ WHERE src=3 AND timestamp BETWEEN ? AND ?+299"""
-        self.sql_fetch_src_rt_sell = """SELECT price FROM ___ WHERE src=4 AND timestamp BETWEEN ? AND ?+299"""
-        self.sql_fetch_src_rt = """SELECT price FROM ___ WHERE src IN (3, 4) AND timestamp BETWEEN ? AND ?+299"""
-        self.sql_fetch_npy = """SELECT * FROM ___"""
-        self.sql_ts_start = """SELECT MAX(timestamp) FROM ___ """
+        
         self.sql, self.sql_keys = {}, None
         
         for col in self.NpyDatapoint.__match_args__:
@@ -108,12 +135,11 @@ class NpyDbUpdater(Database):
             self.db_size_start = 0
         self.t0, self.t1, self.timestamps, self.t_start = 0, 0, [], time.perf_counter()
         self.configure_default_timestamps()
-        self.item_ids = item_ids
-
+        
         self.placeholder = [[0, 0]]
         print(f'\tNpy items: {len(item_ids)} Npy timespan was set to [{ut.loc_unix_dt(self.t0)} - '
               f'{ut.loc_unix_dt(self.t1)}]')
-        if execute_update or new_db:
+        if execute_update:
             # print(f'Created tables in {fmt.delta_t(time.perf_counter()-self.t_start)}')
             start_insert = time.perf_counter()
             # self.generate_db(item_ids=self.item_ids, t0=self.t0, t1=self.t1)
@@ -122,7 +148,7 @@ class NpyDbUpdater(Database):
             # n_done = None
             # while n_done is None or n_done > 0:
             #     n_done = self.insert_row_data(start_idx=n_done)
-
+            
             self.prices_listbox_path, self.prices_listbox = prices_listbox_path, {}
             if prices_listbox_path is not None:
                 self.update_listbox()
@@ -130,7 +156,7 @@ class NpyDbUpdater(Database):
             tpc = time.perf_counter()
             print(f'\n\tDone! Insert time: {fmt.delta_t(tpc-start_insert)} Total runtime: {fmt.delta_t(tpc-self.t_start)}')
         self.con = None
-        
+    
     def configure_default_timestamps(self):
         """ Set up the timestamp array, given the configurations. """
         t1 = 0
@@ -194,6 +220,7 @@ class NpyDbUpdater(Database):
         for idx, item_id in enumerate(item_ids):
             item_start = time.perf_counter()
             self.update_item_id(item_id)
+            
             global item, est_vol_per_char
             sql_i = self.sql.get('insert')
             try:
@@ -209,7 +236,7 @@ class NpyDbUpdater(Database):
                     n_skipped += 1
                     self.updater_print(idx-n_skipped, n_items-n_skipped, n_rows, n_deleted, n_created, exe_times_item)
                     continue
-                
+            
             item = create_item(item_id)
             if not isinstance(item, Item):
                 raise TypeError
@@ -273,7 +300,7 @@ class NpyDbUpdater(Database):
             self.updater_print(idx-n_skipped, n_items-n_skipped, n_rows, n_deleted, n_created, exe_times_item)
             # for k, v in self.prices_listbox.items():
             #     print(k, v)
-            
+    
     def update_item_id(self, item_id: int):
         """
         Load a new item_id; update sql statements by inserting its table. Each time this method is called, all sql
@@ -315,7 +342,7 @@ class NpyDbUpdater(Database):
             # print(self.sql['insert'])
             # exit(1)
             # print(self.sql.get('fetch_wiki'))
-        
+    
     
     def generate_rows(self, item_id: int = None, t0: int = None, t1: int = None):
         """ Generate rows for `item_id` with timestamps spanning from `t0` to `t1` """
@@ -370,7 +397,7 @@ class NpyDbUpdater(Database):
             return self.ts_con_rt.execute(sql, (timestamp, timestamp)).fetchall()
         except TypeError:
             return [0, 0]
-        
+    
     def generate_table(self, item_id: int = None):
         """ Generate a table for `item_id` """
         if item_id is not None:
@@ -400,7 +427,7 @@ class NpyDbUpdater(Database):
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")
             warnings.warn("deprecated", DeprecationWarning)
-        
+            
             cols = list(self.npy_columns)
             ar = np.array(self.con_npy.execute(self.sql.get('fetch_npy')).fetchall())
             ar, cols = avg_price_summed_volume(ar, cols, 12, '1h')
@@ -415,11 +442,11 @@ class NpyDbUpdater(Database):
     def array_file(self, item_id) -> File:
         """ Return the path to the array file with data for `item_id` """
         return File(f'{self.array_directory}{item_id:0>5}.npy')
-        
+    
     def save_arrays(self, arrays: np.ndarray, column_names: Iterable[str], item_id: int):
         """ Save `arrays` with corresponding `column_names` for `item_id` under the appropriate file name """
         return uf.save((column_names, arrays), self.array_file(item_id))
-        
+    
     def load_arrays(self, item_id: int) -> Tuple[np.ndarray, Iterable[str]]:
         """ Load the array file with data for `item_id` """
         column_names, arrays = uf.load(self.array_file(item_id))
@@ -551,7 +578,7 @@ class NpyDbUpdater(Database):
         for item_id in self.item_ids:
             self.update_prices_listbox_entry(item_id)
         self.prices_listbox_path.save(self.prices_listbox)
-
+    
     def update_prices_listbox_entry(self, item_id: int, n_rows: int = cfg.prices_listbox_days, n_intervals: int = 6):
         """
         Compute prices listbox entries for `item_id`. Each row shows the price development for an item throughout the
@@ -589,7 +616,7 @@ class NpyDbUpdater(Database):
         # Fix for missing entries (would otherwise
         if interval_start % interval_size != 0:
             interval_start = interval_start + 14400 - interval_start % 14400
-            
+        
         buy_tags = {0: 'b_0_4', 4: 'b_4_8', 8: 'b_8_12', 12: 'b_12_16', 16: 'b_16_20', 20: 'b_20_24'}
         rows = []
         interval_step = 288 // n_intervals
@@ -604,7 +631,7 @@ class NpyDbUpdater(Database):
                 a5m_p = np.array(self.execute(f"SELECT avg5m_price FROM item{item_id:0>5} WHERE timestamp "
                                               f"BETWEEN ? AND ? AND avg5m_price > 0 ORDER BY avg5m_price",
                                               params, factory=0).fetchall(), dtype=np.int32)
-    
+                
                 tag = buy_tags.get(interval_start % 86400 // 3600)
                 
                 try:
@@ -636,6 +663,25 @@ class NpyDbUpdater(Database):
             interval_start = interval_start - 86400 * 2
         self.prices_listbox[item_id] = rows
         self.updated_listbox = True
+    
+    def new_db(self):
+        """ Delete the existing database and generate a new one + tables. Prompt user for a final confirmation. """
+        if input('Are you sure you wish to delete the current NPY database? This cannot be undone!\n'
+                 '\tPress "y" to confirm: ').lower() == 'y':
+            print('Confirmed. Database will be deleted in 3 seconds...')
+            time.sleep(5)
+            self.delete()
+            
+            print("Database was deleted; generating new tables for each item...")
+            n = len(self.item_ids)
+            for idx, item_id in enumerate(self.item_ids):
+                print(f'\tGenerated {idx}/{n} tables...         ', end='\r')
+                self.generate_table(item_id)
+            print('\nAll tables have been generated!')
+        else:
+            print('Aborting db update and terminating script...')
+            time.sleep(5)
+            exit(1)
 
 
 if __name__ == '__main__':
