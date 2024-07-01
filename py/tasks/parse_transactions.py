@@ -107,6 +107,8 @@ from model.transaction import Transaction
 
 # Log each line that is parsed during this session with the same timestamp
 update_ts = int(time.time())
+
+t = time.time()
 print(f'Using debug input data!')
 
 # TODO: Implement stock correction logic using pending buy/sell transactions as described below
@@ -579,7 +581,6 @@ if __name__ == '__main__':
     # process_current_log(f_log, out_dir=dir_exchange_log)
     # submit_transaction_queue(submit_data=True)
     # exit(123)
-    t = time.time()
     parse_logs_background()
     # submit_transaction_queue(submit_data=True)
     # update_submitted_lines()
