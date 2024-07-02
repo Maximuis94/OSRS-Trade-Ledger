@@ -89,6 +89,7 @@ class NpyDbUpdater(Database):
         """
         super().__init__(path=db_path, parse_tables=False)
         self.item_ids = item_ids
+        self.n = len(item_ids)
         
         if kwargs.get('new_db') is not None and kwargs.get('new_db') and db_path.exists():
             self.new_db()
@@ -142,7 +143,7 @@ class NpyDbUpdater(Database):
         if execute_update:
             # print(f'Created tables in {fmt.delta_t(time.perf_counter()-self.t_start)}')
             start_insert = time.perf_counter()
-            # self.generate_db(item_ids=self.item_ids, t0=self.t0, t1=self.t1)
+            self.generate_db(item_ids=self.item_ids, t0=self.t0, t1=self.t1)
             if self.add_npy_array_files:
                 self.generate_remaining_arrays(tuple(self.item_ids))
             # n_done = None
@@ -300,6 +301,7 @@ class NpyDbUpdater(Database):
             self.updater_print(idx-n_skipped, n_items-n_skipped, n_rows, n_deleted, n_created, exe_times_item)
             # for k, v in self.prices_listbox.items():
             #     print(k, v)
+        print(f"\nUpdated db in {fmt.delta_t(sum(exe_times_item))}", '\n')
     
     def update_item_id(self, item_id: int):
         """
@@ -342,7 +344,6 @@ class NpyDbUpdater(Database):
             # print(self.sql['insert'])
             # exit(1)
             # print(self.sql.get('fetch_wiki'))
-    
     
     def generate_rows(self, item_id: int = None, t0: int = None, t1: int = None):
         """ Generate rows for `item_id` with timestamps spanning from `t0` to `t1` """
@@ -575,9 +576,13 @@ class NpyDbUpdater(Database):
     
     def update_listbox(self):
         """ Update all prices listbox entries and save the result """
-        for item_id in self.item_ids:
+        t_listbox = time.perf_counter()
+        print(f'Updating Listbox. Processed 0/{self.n} items...      ', end='\r')
+        for idx, item_id in enumerate(self.item_ids):
+            print(f'Updating Listbox. Processed {idx+1}/{self.n} items...      ', end='\r')
             self.update_prices_listbox_entry(item_id)
         self.prices_listbox_path.save(self.prices_listbox)
+        print(f'\nUpdated {self.n} listbox entries in {fmt.delta_t(time.perf_counter()-t_listbox)}')
     
     def update_prices_listbox_entry(self, item_id: int, n_rows: int = cfg.prices_listbox_days, n_intervals: int = 6):
         """
@@ -673,9 +678,8 @@ class NpyDbUpdater(Database):
             self.delete()
             
             print("Database was deleted; generating new tables for each item...")
-            n = len(self.item_ids)
             for idx, item_id in enumerate(self.item_ids):
-                print(f'\tGenerated {idx}/{n} tables...         ', end='\r')
+                print(f'\tGenerated {idx}/{self.n} tables...         ', end='\r')
                 self.generate_table(item_id)
             print('\nAll tables have been generated!')
         else:
