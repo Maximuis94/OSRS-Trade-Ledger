@@ -32,6 +32,7 @@ tables_timeseries = ['avg5m', 'realtime', 'wiki']
 
 # Timeseries table tuple where each index corresponds to the src integer value
 timeseries_srcs = ('wiki', 'avg5m_buy', 'avg5m_sell', 'realtime_buy', 'realtime_sell')
+timeseries_srcs_abr = ('w', 'a_b', 'a_s', 'rt_b', 'rt_s')
 tables_local = ['item', 'transaction']
 tables = tables_timeseries + tables_local
 

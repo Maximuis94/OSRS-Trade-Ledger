@@ -105,6 +105,7 @@ def parse_batch(batch_path: str or File, out_file: str = None, dir_out: str = No
     """
     if isinstance(batch_path, str):
         batch_path = File(batch_path)
+    print(f"\tConverting batch {batch_path.file}          ", end='\r')
     batch, parsed = batch_path.load(), []
     min_ts, max_ts, track_ts = int(time.time()), 0, dir_out is not None and out_file is None
     n = 0
@@ -184,12 +185,12 @@ def insert_batch(db: Database, batch_path: str, skip_ids: list = (9044, 9050, 26
     db.commit()
     
     n, repl = sum(n_per_src), [('realtime', 'rt'), ('sell', 's'), ('buy', 'b')]
-    s = '\tRows inserted: '
-    for src, _n in zip(var.timeseries_srcs, n_per_src):
+    s = '\tRows/src ['
+    for src, _n in zip(var.timeseries_srcs_abr, n_per_src):
         for el in repl:
             src.replace(*el)
         s += f'{src}: {_n}, '
-    print(s+f'total: {n}')
+    print(s+f'Total: {n}]')
     if remove_src:
         batch_path = File(batch_path)
         batch_path.delete()
@@ -235,13 +236,14 @@ def batch_transfer(db_to: Database, min_ts: int = None):
     for src, n_ in n_rows.items():
         for el in repl:
             src = src.replace(*el)
-        n += f'{src}: {n_}, '
-    print(f'\tTransferred rows [{n[:-2]}] | Time taken: {fmt.delta_t(time.perf_counter()-batch_start)}s')
+        n += f"\n\t\t{src.file}: {n_}"
+    print(f'\tTransferred rows {n}'
+          f'\n\t\tTime taken: {fmt.delta_t(time.perf_counter()-batch_start)}')
     
     n = ''
     n_inserted = 0
     for src, n_ in zip(list(n_rows.keys()), rows):
-        n += f'{src}: {n_}, '
+        n += f"{src.file}: {n_}, "
     for _, n in n_rows.items():
         n_inserted += n
     print(f'\tTotal rows transferred from batches: [{n_inserted}]')
