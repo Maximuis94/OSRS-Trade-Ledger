@@ -236,7 +236,7 @@ def batch_transfer(db_to: Database, min_ts: int = None):
     for src, n_ in n_rows.items():
         for el in repl:
             src = src.replace(*el)
-        n += f"\n\t\t{src.file}: {n_}"
+        n += f"\n\t\t{src.split('/')[-1]}: {n_}"
     print(f'\tTransferred rows {n}'
           f'\n\t\tTime taken: {fmt.delta_t(time.perf_counter()-batch_start)}')
     
