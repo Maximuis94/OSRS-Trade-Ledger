@@ -302,7 +302,6 @@ def download_wiki_prices_rt_averaged(timespan: str = '5m', timestamp: int = None
         return None
 
 
-
 def graph_wiki_historical(item_id: int, t1: int or float = 0, t2: int or float = time.time()):
     """ Download historical wiki data for the given `item_id` within the specified time frame """
     url = f"https://api.weirdgloop.org/exchange/history/osrs/all?id={item_id}"

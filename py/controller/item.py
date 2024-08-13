@@ -13,6 +13,7 @@ import sqlite.row_factories
 from global_variables.importer import *
 from model.database import Database
 from model.item import Item
+from model.data_source import SRC
 import global_variables.variables as var
 from backend.download import realtime_prices
 
@@ -308,12 +309,12 @@ class ItemController(Database):
 
         try:
             i.current_ge = ItemController.wiki.execute(f"SELECT price, MAX(timestamp) FROM item{i.item_id:0>5} WHERE "
-                                                         "src=0", p, factory=0).fetchone()
+                                                       f"src={SRC.w}", p, factory=0).fetchone()
         except IndexError:
             i.current_ge = 0
         # print(i.current_ge)
         try:
-            volumes = ItemController.wiki.execute(f"SELECT volume FROM item{i.item_id:0>5} WHERE src=0", p, factory=0).fetchall()
+            volumes = ItemController.wiki.execute(f"SELECT volume FROM item{i.item_id:0>5} WHERE src={SRC.w}", p, factory=0).fetchall()
             if len(volumes) == 0:
                 i.avg_volume_day = 0
             else:

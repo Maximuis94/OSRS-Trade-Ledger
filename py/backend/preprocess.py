@@ -6,6 +6,7 @@ import sqlite3
 from collections.abc import Iterable
 
 import global_variables.path as gp
+from model.data_source import SRC
 from model.database import Database
 
 
@@ -20,13 +21,13 @@ def add_item_data(item_ids: int or Iterable, add_table: bool = False):
     for item_id in item_ids:
         if add_table:
             try:
-                con2.execute(f"""CREATE TABLE "item{item_id:0>5}"("src" INTEGER NOT NULL CHECK (src BETWEEN 0 AND 4), "timestamp" INTEGER NOT NULL, "price" INTEGER NOT NULL DEFAULT 0 CHECK (price>=0), "volume" INTEGER NOT NULL DEFAULT 0 CHECK (volume>=0), PRIMARY KEY(src, timestamp) )""")
+                con2.execute(f"""CREATE TABLE "item{item_id:0>5}"("src" INTEGER NOT NULL, "timestamp" INTEGER NOT NULL, "price" INTEGER NOT NULL DEFAULT 0 CHECK (price>=0), "volume" INTEGER NOT NULL DEFAULT 0 CHECK (volume>=0), PRIMARY KEY(src, timestamp) )""")
             except sqlite3.Error:
                 ...
         
-        for src in range(5):
-            con2.executemany(f"""INSERT INTO "item{item_id:0>5}"(src, timestamp, price, volume) VALUES ({src}, ?, ?, ?)""",
-                             con.execute("""SELECT timestamp, price, volume FROM item00002 WHERE src=?""", (src,),
+        for _src in SRC:
+            con2.executemany(f"""INSERT INTO "item{item_id:0>5}"(src, timestamp, price, volume) VALUES ({_src}, ?, ?, ?)""",
+                             con.execute("""SELECT timestamp, price, volume FROM item00002 WHERE src=?""", (_src.src_id,),
                                          factory=tuple).fetchall())
     con2.commit()
     con2.close()

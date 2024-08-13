@@ -15,6 +15,7 @@ import util.array as u_ar
 import util.file as uf
 import util.str_formats as fmt
 from file.file import File
+from model.data_source import SRC
 from model.database import Database
 
 shutdown = False
@@ -23,6 +24,7 @@ last_print = ''
 n_inserts = 0
 t_commit = time.perf_counter()
 commit_frequency = 20
+avg5m_srcs = SRC.by_source('avg5m', return_attribute='src_id')
 
 
 def commit_data(db: sqlite3.Connection, t_commit: int, done: Iterable, to_do: Iterable, progress_file: str = None):

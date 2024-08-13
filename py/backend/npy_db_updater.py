@@ -27,6 +27,7 @@ from controller.item import create_item, Item
 from data_processing.npy_array_computations import avg_price_summed_volume
 from file.file import File
 from global_variables.data_classes import NpyDatapoint as NpyDp
+from model.data_source import DataSource, SRC
 from model.database import Database
 
 item = create_item(2)
@@ -50,12 +51,13 @@ class NpyDbUpdater(Database):
                             VALUES {str(tuple(['?' for _ in NpyDatapoint.__match_args__]))}""".replace("'", "")
     sql_del_rows: str = """DELETE FROM ___ WHERE timestamp < ?"""
     sql_count_del: str = f"""SELECT COUNT(*) FROM ___ WHERE timestamp < ?"""
-    sql_fetch_src_wiki: str = """SELECT ?, price, volume, MAX(timestamp) FROM ___ WHERE src=0 AND timestamp<?"""
-    sql_fetch_src_avg5m_buy: str = """SELECT price, volume, ? FROM ___ WHERE src=1 AND timestamp=?"""
-    sql_fetch_src_avg5m_sell: str = """SELECT price, volume, ? FROM ___ WHERE src=2 AND timestamp=?"""
-    sql_fetch_src_rt_buy: str = """SELECT price FROM ___ WHERE src=3 AND timestamp BETWEEN ? AND ?+299"""
-    sql_fetch_src_rt_sell: str = """SELECT price FROM ___ WHERE src=4 AND timestamp BETWEEN ? AND ?+299"""
-    sql_fetch_src_rt: str = """SELECT price FROM ___ WHERE src IN (3, 4) AND timestamp BETWEEN ? AND ?+299"""
+    sql_fetch_src_wiki: str = f"""SELECT ?, price, volume, MAX(timestamp) FROM ___ WHERE src={SRC.w} AND timestamp<?"""
+    sql_fetch_src_avg5m_buy: str = f"""SELECT price, volume, ? FROM ___ WHERE src={SRC.a_b} AND timestamp=?"""
+    sql_fetch_src_avg5m_sell: str = f"""SELECT price, volume, ? FROM ___ WHERE src={SRC.a_s} AND timestamp=?"""
+    sql_fetch_src_rt_buy: str = f"""SELECT price FROM ___ WHERE src={SRC.r_b} AND timestamp BETWEEN ? AND ?+299"""
+    sql_fetch_src_rt_sell: str = f"""SELECT price FROM ___ WHERE src={SRC.r_s} AND timestamp BETWEEN ? AND ?+299"""
+    sql_fetch_src_rt: str = f"""SELECT price FROM ___ WHERE src IN {SRC.by_source('realtime')} AND
+                                timestamp BETWEEN ? AND ?+299"""
     sql_fetch_npy: str = """SELECT * FROM ___"""
     sql_ts_start: str = """SELECT MAX(timestamp) FROM ___ """
     
@@ -163,7 +165,8 @@ class NpyDbUpdater(Database):
         t1 = 0
         for i in go.most_traded_items:
             t1 = max(t1, self.src_db.execute(
-                self.set_table_name(f"""SELECT MAX(timestamp) FROM ___ WHERE src in (1, 2)""", i),
+                self.set_table_name(f"""SELECT MAX(timestamp) FROM ___
+                WHERE src in {SRC.by_source('avg5m')}""", i),
                 factory=0).fetchone())
         self.t0, self.t1 = int(t1 - t1 % 86400 - cfg.npy_db_timespan * 86400), int(t1 - t1 % 14400)
         self.timestamps = range(self.t0, self.t1, 300)
@@ -349,13 +352,13 @@ class NpyDbUpdater(Database):
         """ Generate rows for `item_id` with timestamps spanning from `t0` to `t1` """
         if item_id is not None:
             self.update_item_id(item_id)
-        return [list(self.get_src_data(0, timestamp, item_id)) +
-                list(self.get_src_data(1, timestamp, item_id)) +
-                list(self.get_src_data(2, timestamp, item_id)) +
+        return [list(self.get_src_data(SRC.w, timestamp, item_id)) +
+                list(self.get_src_data(SRC.a_b, timestamp, item_id)) +
+                list(self.get_src_data(SRC.a_s, timestamp, item_id)) +
                 [self.get_src_data(5, timestamp, item_id)]
                 for timestamp in range(self.t0 if t0 is None else t0, (self.t1 if t1 is None else t1), 300)]
     
-    def get_src_data(self, src: int, timestamp: int, item_id: int = None):
+    def get_src_data(self, src: int or DataSource, timestamp: int, item_id: int = None):
         """
         Get data from source `src` from the currently configured item_id or set config to `item_id`, if specified.````
         The following sources have been mapped to `src`s;
@@ -364,8 +367,8 @@ class NpyDbUpdater(Database):
         
         Parameters
         ----------
-        src : int
-            The source of the data to fetch
+        src : int or DataSource
+            The source ID of the data to fetch. Can also be passed as an instance of DataSource.
         timestamp: int
             The timestamp of the data that is to be fetched
         item_id : int, optional, None by default
@@ -387,6 +390,10 @@ class NpyDbUpdater(Database):
         """
         if item_id is not None:
             self.update_item_id(item_id)
+        
+        if not isinstance(src, int):
+            src = src.src_id
+        
         sql = self.sql.get(self.sql_keys[src])
         # print(sql)
         try:
