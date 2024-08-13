@@ -12,9 +12,11 @@ Instances can be imported individually, or as a specifically ordered tuple (SRCS
 """
 import time
 from collections import namedtuple
-from typing import List
+from dataclasses import dataclass, field
+from typing import List, Tuple
 
 import global_variables.path as gp
+from global_variables.classes import SingletonMeta
 from model.database import Database
 
 
@@ -22,6 +24,7 @@ from model.database import Database
 timeseries_database = Database(path=gp.f_db_timeseries, read_only=True)
 
 
+@dataclass(init=False)
 class DataSource:
     """
     Class definition for a source that data is scraped from. DataSource class instances can also be used to access data
@@ -31,6 +34,8 @@ class DataSource:
     ----------
     src_id : int
         The id assigned to this DataSource. This is the value that is also used for the src column in the databases.
+    source : str
+        The name of the source this data originates from. This value is derived from the `name` attribute
     name : str
         The (full) name of this DataSource. The name should fully distinguish this source from other potentially similar
         sources and may have some of its attribute values in it.
@@ -53,23 +58,35 @@ class DataSource:
         Method used to fetch data of this source using the specified parameters.
     
     """
-    db: Database = timeseries_database
+    src_id: int = field(compare=True)
+    source: str = field(compare=False)
+    name: str = field(compare=False)
+    abbreviation: str = field(compare=False)
+    average_scrape_frequency: int = field(compare=False)
+    is_buy: bool = field(compare=False)
+    _sql_fetch: str = field(compare=False)
+    _repr: str = field(compare=False)
+    
+    db: Database = field(default=timeseries_database, compare=False)
     
     def __init__(self, src_id: int, name: str, abbreviation: str, average_scrape_frequency: int):
-        self.src_id: int = src_id
-        self.name: str = name
-        self.abbreviation: str = abbreviation
-        self.average_scrape_frequency: int = average_scrape_frequency
+        self.src_id, self._repr = src_id, str(src_id)
         
-        self.is_buy: bool = None if abbreviation[-1] not in ('b', 's') else abbreviation == 'b'
+        self.source = name.split('_')[0]
+        self.name = name
+        self.abbreviation = abbreviation
+        self.average_scrape_frequency = average_scrape_frequency
+        
+        self.is_buy = None if abbreviation[-1] not in ('b', 's') else abbreviation == 'b'
+        self._sql_fetch = f"""SELECT * FROM item_____ WHERE src={self._repr} AND timestamp BETWEEN ? AND ?"""
+    
+    def __repr__(self) -> str:
+        """ This is the value that represents this object if it is inserted into a string, which is `src_id` as str """
+        return self._repr
         
     def fetch_data(self, item_id: int, t0: int, t1: int = int(time.time())) -> List[any]:
         """ Fetch data of this source for `item_id` that ranges from `t0` to `t1` (inclusive on both ends) """
-        return self.db.execute(f"""SELECT * FROM item{item_id:0>5} WHERE src=? AND timestamp BETWEEN ? AND ?""",
-                               (self.src_id, t0, t1)).fetchall()
-    
-    def __repr__(self):
-        return self.src_id
+        return self.db.execute(self._sql_fetch.replace('_____', f'{item_id:0>5}'), (t0, t1)).fetchall()
 
 
 # Official wiki data
@@ -100,7 +117,7 @@ src_as = DataSource(
 
 
 # Runelite realtime buy data
-src_rtb = DataSource(
+src_rb = DataSource(
     src_id=3,
     name='realtime_buy',
     abbreviation='r_b',
@@ -109,7 +126,7 @@ src_rtb = DataSource(
 
 
 # Runelite realtime sell data
-src_rts = DataSource(
+src_rs = DataSource(
     src_id=4,
     name='realtime_sell',
     abbreviation='r_s',
@@ -117,16 +134,60 @@ src_rts = DataSource(
 )
 
 
-# Hard-coded tuple that can be used for accessing specific DataSources via index or namedtuple label
-_Srcs = namedtuple('Srcs', ('w', 'a_b', 'a_s', 'r_b', 'r_s'))
-SRCS = _Srcs(
+class _Srcs(namedtuple('Srcs', ('w', 'a_b', 'a_s', 'r_b', 'r_s')), metaclass=SingletonMeta):
+    """
+    Singleton namedtuple class for existing DataSources. This class is used to access specific DataSource instances from
+    the namedtuple instance, given specific properties.
+    
+    Methods starting with 'by' are semi hard-coded calls to _matching_values() that return DataSources with a specific
+    value for the corresponding property of that method. Additionally, it can return a specific attribute by setting
+    `return_attribute`
+    
+    """
+    def __str__(self):
+        """ String representation of this tuple as a tuple of src_ids per element. """
+        # return f"({self.w}, {self.a_b}, {self.a_s}, {self.r_b}, {self.r_s})"
+        return str(tuple([self.__getattribute__(el).src_id for el in self._fields]))
+    
+    def _matching_values(self, attribute_name: str, value: any, return_attribute: str = None) -> List[DataSource]:
+        """ Return DataSource instances of which the value of attribute `attribute_name` matches `value` as a tuple. """
+        if return_attribute is None:
+            return [el for el in self if isinstance(el, DataSource) and el.__getattribute__(attribute_name) == value]
+        else:
+            return [el.__getattribute__(return_attribute) for el in self
+                    if isinstance(el, DataSource) and el.__getattribute__(attribute_name) == value]
+    
+    def by_source(self, source: str, return_attribute: str = None) -> Tuple[DataSource]:
+        """ Method for fetching all DataSources with source=`source` """
+        return tuple(self._matching_values('source', source, return_attribute))
+    
+    def by_is_buy(self, is_buy: bool or None, return_attribute: str = None) -> Tuple[DataSource]:
+        """ Method for fetching all DataSources with is_buy=`is_buy` """
+        return tuple(self._matching_values('is_buy', is_buy, return_attribute))
+    
+    def by_scrape_frequency(self, average_scrape_frequency: int, return_attribute: str = None) -> Tuple[DataSource]:
+        """ Method for fetching all DataSources with average_scrape_frequency=`average_scrape_frequency` """
+        return tuple(self._matching_values('average_scrape_frequency', average_scrape_frequency, return_attribute))
+
+    def from_id(self, attribute_name: str, value: any) -> DataSource:
+        """ Returns the DataSource that corresponds to `src_id`, provided it exists. If not, raise ValueError. """
+        for el in self:
+            if el.__getattribute__(attribute_name) == value:
+                return el
+        raise ValueError(f"Unable to find a logged DataSource for {attribute_name}={value}")
+
+
+SRC: _Srcs[DataSource] = _Srcs(
     w=src_w,
     a_b=src_ab,
     a_s=src_as,
-    r_b=src_rtb,
-    r_s=src_rts
+    r_b=src_rb,
+    r_s=src_rs
 )
 
 if __name__ == '__main__':
-    print(SRCS[0], SRCS.a_b)
+    print(SRC.from_id('src_id', 3).__dict__)
+    print([type(el) for el in SRC.by_source('avg5m', return_attribute=None)])
+    # print(SRC[3].__dict__)
+    print(f"""CREATE TABLE "item{2:0>5}"("src" INTEGER NOT NULL CHECK (src IN {SRC}), "timestamp" INTEGER NOT NULL, "price" INTEGER NOT NULL DEFAULT 0 CHECK (price>=0), "volume" INTEGER NOT NULL DEFAULT 0 CHECK (volume>=0), PRIMARY KEY(src, timestamp) )""")
     
