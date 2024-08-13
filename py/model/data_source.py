@@ -19,7 +19,6 @@ import global_variables.path as gp
 from global_variables.classes import SingletonMeta
 from model.database import Database
 
-
 # Timeseries database with data of all sources
 timeseries_database = Database(path=gp.f_db_timeseries, read_only=True)
 
@@ -48,6 +47,9 @@ class DataSource:
     is_buy : bool
         Boolean that reflects whether this is purchase or sales data. The value of `is_buy` is determined using the
         final char of `abbreviation`, which indicates whether this source is a purchase, sale or neither.
+    min_ts : int
+        Lowest UNIX timestamp possible for this source; this value is identical per source, not distinguished by
+        buy/sell. For realtime data, this value is set to the minimum timestamp of cannonballs.
     db : Database
         The SQLite database that data of this source originates from when making calls to fetch_data(). A read-only
         instance of the timeseries Database is assigned as this attribute.
@@ -63,19 +65,21 @@ class DataSource:
     name: str = field(compare=False)
     abbreviation: str = field(compare=False)
     average_scrape_frequency: int = field(compare=False)
+    min_ts: int = field(compare=False)
     is_buy: bool = field(compare=False)
     _sql_fetch: str = field(compare=False)
     _repr: str = field(compare=False)
     
     db: Database = field(default=timeseries_database, compare=False)
     
-    def __init__(self, src_id: int, name: str, abbreviation: str, average_scrape_frequency: int):
+    def __init__(self, src_id: int, name: str, abbreviation: str, average_scrape_frequency: int, min_ts: int):
         self.src_id, self._repr = src_id, str(src_id)
         
         self.source = name.split('_')[0]
         self.name = name
         self.abbreviation = abbreviation
         self.average_scrape_frequency = average_scrape_frequency
+        self.min_ts = min_ts
         
         self.is_buy = None if abbreviation[-1] not in ('b', 's') else abbreviation == 'b'
         self._sql_fetch = f"""SELECT * FROM item_____ WHERE src={self._repr} AND timestamp BETWEEN ? AND ?"""
@@ -94,6 +98,7 @@ src_w = DataSource(
     src_id=0,
     name='wiki',
     abbreviation='w',
+    min_ts=1427500800,
     average_scrape_frequency=86400
 )
 
@@ -103,6 +108,7 @@ src_ab = DataSource(
     src_id=1,
     name='avg5m_buy',
     abbreviation='a_b',
+    min_ts=1616688900,
     average_scrape_frequency=300
 )
 
@@ -112,6 +118,7 @@ src_as = DataSource(
     src_id=2,
     name='avg5m_sell',
     abbreviation='a_s',
+    min_ts=1616688900,
     average_scrape_frequency=300
 )
 
@@ -121,6 +128,7 @@ src_rb = DataSource(
     src_id=3,
     name='realtime_buy',
     abbreviation='r_b',
+    min_ts=1666203032,
     average_scrape_frequency=60
 )
 
@@ -130,6 +138,7 @@ src_rs = DataSource(
     src_id=4,
     name='realtime_sell',
     abbreviation='r_s',
+    min_ts=1666203032,
     average_scrape_frequency=60
 )
 
@@ -186,8 +195,4 @@ SRC: _Srcs[DataSource] = _Srcs(
 )
 
 if __name__ == '__main__':
-    print(SRC.from_id('src_id', 3).__dict__)
-    print([type(el) for el in SRC.by_source('avg5m', return_attribute=None)])
-    # print(SRC[3].__dict__)
-    print(f"""CREATE TABLE "item{2:0>5}"("src" INTEGER NOT NULL CHECK (src IN {SRC}), "timestamp" INTEGER NOT NULL, "price" INTEGER NOT NULL DEFAULT 0 CHECK (price>=0), "volume" INTEGER NOT NULL DEFAULT 0 CHECK (volume>=0), PRIMARY KEY(src, timestamp) )""")
-    
+    ...
