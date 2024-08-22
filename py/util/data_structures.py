@@ -3,17 +3,13 @@ Module with various methods related to data structures like sqlite databases, bu
 Methods in this module are extensively commented
 
 """
-import os.path
 import sqlite3
-import time
-from collections import namedtuple
-from typing import List, Type, Dict, Callable, NamedTuple, Tuple
+from collections.abc import Iterable
+from typing import List, Dict, Callable, NamedTuple, Tuple
 
-import global_variables.values as gv
 import global_variables.variables as var
 from file.file import File
 from global_variables.data_classes import TimeseriesRow, Avg5mDatapoint, RealtimeDatapoint, WikiDatapoint
-from util import str_formats as fmt
 
 
 def get_sorted_tuple(_list, reverse_sort: bool = False) -> tuple:
@@ -26,41 +22,6 @@ def get_sorted_tuple(_list, reverse_sort: bool = False) -> tuple:
 def dict_factory(sqlite_cursor: sqlite3.Cursor, row) -> dict:
     """ Method that can be set as row_factory of a sqlite3.Connection so it will return dicts """
     return {col[0]: row[idx] for idx, col in enumerate(sqlite_cursor.description)}
-
-
-def connect(db_file: File, set_row_factory: bool = True, prt: bool = False) -> sqlite3.Connection:
-    """
-    Connect with the sqlite database specified by `db_file`. The database is assumed to exist; an error will be raised
-    if it does not.
-    
-    Parameters
-    ----------
-    db_file : str
-        Path to the database to connect to.
-    set_row_factory : bool, optional, True by default
-        If True, configure a row dict factory for this connection
-    prt : bool, optional, False by default
-        True to print updates on the established connection
-
-    Returns
-    -------
-    sqlite3.Connection
-        The established connection with the database
-    
-    Raises
-    ------
-    FileNotFoundError
-        If `db_file` does not exist, a FileNotFoundError is raised.
-
-    """
-    if not db_file.exists():
-        raise FileNotFoundError(f'Unable to connect to non-existent db file {db_file}')
-    con = sqlite3.connect(db_file.path)
-    if prt:
-        print(f'Connected with sqlite database at {db_file}')
-    if set_row_factory:
-        con.row_factory = dict_factory
-    return con
     
 
 def get_df_dtype(column_name: str) -> str:
@@ -99,41 +60,6 @@ def convert_dtype_df_sqlite(df_dtype: str) -> str:
     return var.dtypes_by_df.get(df_dtype).sql
 
 
-def exe_select_one(cursor: sqlite3.Cursor, sql: str, parameters: dict = None) -> any:
-    """ Execute `sql` via `cursor` with `parameters` as parameters. Return as one row. """
-    return cursor.execute(sql, parameters).fetchone()
-
-
-def exe_select(cursor: sqlite3.Cursor, sql: str, *args, **kwargs) -> List[any]:
-    """
-    Execute sql select query `sql` via `cursor` with `parameters` as parameters. Return a specific amount of rows if
-    `n_rows` is passed.
-    
-    Parameters
-    ----------
-    cursor : sqlite3.Cursor
-        cursor object with a link to the db that is to be queried
-    sql : str
-        executable sql statement for querying rows
-    
-    Other Parameters
-    ----------------
-    
-
-    Returns
-    -------
-    List[any]
-        A list of rows that meet the requirements specified in `sql` is returned
-
-    """
-    n_rows = kwargs.get('n_rows')
-    
-    if n_rows is None:
-        return cursor.execute(sql, args[0] if len(args) > 0 else kwargs.get('parameters')).fetchall()
-    else:
-        return cursor.execute(sql, args[0] if len(args) > 0 else kwargs.get('parameters')).fetchmany(n_rows)
-
-
 def datapoint(row: dict) -> List[TimeseriesRow]:
     """ Parse dict `row`, convert it to the appropriate LegacyDatapoint and then to a TimeseriesDatapoint """
     row = {k: row.get(k) for k in var.legacy_keys if row.get(k) is not None}
@@ -147,11 +73,15 @@ def datapoint(row: dict) -> List[TimeseriesRow]:
     raise ValueError(f'Unable to determine LegacyRow typing for row {row}')
 
 
-if __name__ == "__main__":
-    nt = namedtuple('Avg5mDatapoint', ['timestamp', 'buy_price', 'buy_volume', 'sell_price', 'sell_volume'])
-    for el in get_dtypes(nt):
-        print(el)
-    # for k, v in nt.__dict__.items():
-    #     print(k, v)
-    exit(1233)
-    get_dtypes(nt)
+def update_existing_dict_values(to_update: dict, new_values: dict) -> dict:
+    """ Update `to_update` with values from `new_values`, but only with keys found in both dicts """
+    for k in frozenset(new_values).intersection(to_update):
+        to_update[k] = new_values.get(k)
+    return to_update
+
+
+def remove_dict_entries(_dict: dict, keys: Iterable) -> dict:
+    """ Removes entries from `_dict` under keys found in `keys` and returns the resulting dict """
+    for k in frozenset(_dict).intersection(keys):
+        del _dict[k]
+    return _dict
