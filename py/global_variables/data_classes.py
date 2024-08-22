@@ -39,7 +39,7 @@ from typing import Tuple
 import numpy as np
 from overrides import override
 
-from global_variables import path as gp
+import global_variables.path as gp
 
 
 #######################################################################################################################
