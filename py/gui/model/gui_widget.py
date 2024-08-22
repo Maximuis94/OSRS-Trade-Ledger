@@ -8,13 +8,15 @@ import tkinter as tk
 import tkinter.ttk as ttk
 from abc import ABC, abstractmethod
 from collections.abc import Callable
+from dataclasses import dataclass
 from typing import List, Tuple
 
 import util.gui as ug
 from gui.model.grid import TkGrid
+from util.data_structures import remove_dict_entries
 
 
-class GuiWidget(ABC):
+class GuiWidget:
     """
     Wrapper class for GUI widgets that defines basic widget behaviour
     Each GUI widget has a master frame, 0-n event bindings, a set of tk vars and a font that is
@@ -24,28 +26,17 @@ class GuiWidget(ABC):
     -----
     This class should be inherited alongside another tk widget
     """
-    
-    def __init__(self, frame: (tk.Frame, ttk.Frame), grid_tag: str, grid: TkGrid = None,
-                 event_bindings: List[Tuple[str, Callable]] = (), padx: int = 0, pady: int = 0, sticky: str = 'N', **kwargs):
-        # super().__init__(master=frame, widgetName='Button', **kwargs)
-        self.frame = frame
-        self.grid_tag = grid_tag
-        self.tk_grid = grid
-        self.tk_vars = {}
-        self.font = ()
-        self.event_bindings: List[Tuple[str, Callable]] = event_bindings
-        if len(self.event_bindings) > 0:
-            self.set_event_bindings()
-        self._set_bindings()
-        if kwargs.get('padxy') is not None:
-            self.padx, self.pady = kwargs.get('padxy')
-        else:
-            self.padx = padx
-            self.pady = pady
-        self.sticky = sticky
-        self.apply_grid()
+    frame: tk.Frame or ttk.Frame
+    grid_tag: str
+    tk_grid: TkGrid
+    event_bindings: List[Tuple[str, Callable]] = []
+    padx: int = 0
+    pady: int = 0
+    sticky: str = 'N'
+    tk_vars: dict = {}
+    font: tuple = ()
         
-    def apply_grid(self, grid: TkGrid = None, padx: int = None, pady: int = None, sticky: str = None):
+    def apply_grid(self, grid: TkGrid = None, grid_tag: str = None, padx: int = None, pady: int = None, sticky: str = None, **kwargs):
         """
         Apply grid configurations from `grid` or the previously configured grid. If optional parameters are omitted,
         the currently active configuration will be used instead
@@ -61,8 +52,9 @@ class GuiWidget(ABC):
         sticky : str, optional, None by default
             The edge to which the parameter will be positioned against.
         """
-        if grid is not None:
-            self.tk_grid = grid
+        
+        self.verify_attribute('tk_grid', attribute_value=grid, failed_method='apply_grid')
+        self.verify_attribute('grid_tag', attribute_value=grid_tag, failed_method='apply_grid')
         if padx is not None:
             self.padx = padx
         if pady is not None:
@@ -73,8 +65,28 @@ class GuiWidget(ABC):
         self._grid(**self.tk_grid.get_dims(self.grid_tag, pady=self.pady, padx=self.padx, sticky=self.sticky))
     
     def _grid(self, **kwargs):
-        self.grid(**kwargs)
+        """ Calls the grid method of the tkinter object to place it. This  """
+        try:
+            self.grid(**kwargs)
+        except AttributeError:
+            raise AttributeError("GuiWidget does not appear to have a grid method. This method should be inherited via"
+                                 " an existing tkinter widget class like ttk.Button.")
     
+    def _set_padding(self, **kwargs):
+        """ Set x- and y-padding for this Widget, either via padxy as a tuple, or padx and pady separately """
+        keys = frozenset(('padxy', 'padx', 'pady')).intersection(kwargs)
+        if len(keys) > 0:
+            for next_pad in frozenset(('padxy', 'padx', 'pady')).intersection(kwargs):
+                value = kwargs.get(next_pad)
+                if value is not None:
+                    if next_pad == 'padxy':
+                        self.padx, self.pady = value
+                        break
+                    else:
+                        self.__setattr__(next_pad, value)
+            kwargs = remove_dict_entries(_dict=kwargs, keys=keys)
+        return kwargs
+        
     def _set_bindings(self, event_bindings: List[Tuple[str, Callable]] = None):
         if event_bindings is not None:
             self.event_bindings += event_bindings
@@ -127,6 +139,19 @@ class GuiWidget(ABC):
 
     # def grid(self, param):
     #     pass
+    def verify_attribute(self, attribute_name: str, attribute_value: any = None, failed_method: str = None):
+        """ Set an attribute value or verify if an attribute is already set. If not, raise a descriptive error """
+        if attribute_value is not None:
+            self.__setattr__(attribute_name, attribute_value)
+            return
+        try:
+            if self.__getattribute__(attribute_name) is None:
+                raise AttributeError()
+        except AttributeError:
+            s = f"Verification for attribute {attribute_name} failed."
+            if failed_method is not None:
+                s += f" Make sure it is already set while/before calling {failed_method}()"
+            raise AttributeError(s)
 
 
 class InputWidget(GuiWidget):
@@ -159,3 +184,14 @@ class InputWidget(GuiWidget):
         ...
     
     
+@dataclass
+class A:
+    a: int = 1
+    b: int = 2
+    c: int = 4
+
+if __name__ == '__main__':
+    aaa = A(2, 3, 4)
+    
+    aaa.__dict__.update({'a': 2, 'd': 5})
+    print(aaa.__dict__)

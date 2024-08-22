@@ -14,6 +14,7 @@ from collections import namedtuple
 from collections.abc import Iterable, Collection, Sequence
 from typing import Tuple, Dict
 
+# X, Y, W, H
 WidgetDimensions = namedtuple('WidgetDimensions', ['column', 'row', 'columnspan', 'rowspan'])
 
 
@@ -96,8 +97,8 @@ class TkGrid:
                 break
         self.widgets[tag] = WidgetDimensions(x, y, w, h)
     
-    def get_dims(self, tag, padx: int = 0, pady: int = 0, sticky: str = 'N', **kwargs) -> Dict[str, int]:
-        """ Get the dimensions for widget `tag` and update dict w/ kwargs. Output can be passed directly to ttk.grid(). """
+    def get_dims(self, tag, padx: int = None, pady: int = None, sticky: str = None, **kwargs) -> Dict[str, int]:
+        """ Get the dimensions for widget `tag`. Output can be given to ttk.grid() as kwargs"""
         if self.widgets.get(tag) is None:
             raise RuntimeError(f"Unable to find tag {tag} in this grid")
         output = self.widgets.get(tag)._asdict()
@@ -109,4 +110,5 @@ if __name__ == '__main__':
     tkg = TkGrid(['AAAAAaaaaabbbbbbb',
             'AAAAAaaaaabbbbbbb',
             'ccccccccccccccccc'])
-    print(tkg.dims)
+    print(tkg.get_dims('A'))
+    
