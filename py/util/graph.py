@@ -8,10 +8,12 @@ import matplotlib.patches as mpatches
 import matplotlib.pyplot as plt
 import numpy as np
 
+from import_parent_folder import recursive_import
 import util.unix_time as ut
 import util.str_formats as fmt
 import global_variables.configurations as gc
 import global_variables.values as gv
+del recursive_import
 
 
 def compute_graph_statistics(x_axis, y_axis, value_name):

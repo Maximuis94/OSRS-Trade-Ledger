@@ -3,11 +3,14 @@ This module contains template classes for creating asynchronous tasks. These tas
 Specific realisations of async classes are listed in separate modules within the tasks folder
 
 """
+import ctypes
 import datetime
 import threading
+import time
 
 import path
 # import ts_util
+import util.str_formats as fmt
 
 
 class AsyncTask(threading.Thread):
@@ -16,12 +19,39 @@ class AsyncTask(threading.Thread):
         self.task = task
         self.on_complete = callback_oncomplete
         self.string = ''
+        self.active = False
+        self.kwargs = kwargs
     
     def run(self):
-        self.string = self.task()
+        t_start = time.perf_counter()
+        self.active = True
+        self.string = self.task(**self.kwargs)
+        self.active = False
+            
         if self.on_complete is not None:
             self.on_complete()
-            print(self.string)
+            if self.string is not None:
+                print(self.string)
+
+    def get_id(self):
+        # returns id of the respective thread
+        if hasattr(self, '_thread_id'):
+            return self._thread_id
+        for id, thread in threading._active.items():
+            if thread is self:
+                return id
+    
+    def conditionally_terminate_thread(self):
+        """ Terminate this thread if it is running  """
+        if not self.active and self.is_alive():
+            self.raise_exception()
+            self.join()
+    
+    def raise_exception(self):
+        thread_id = self.get_id()
+        res = ctypes.pythonapi.PyThreadState_SetAsyncExc(thread_id, ctypes.py_object(SystemExit))
+        if res > 1:
+            ctypes.pythonapi.PyThreadState_SetAsyncExc(thread_id, 0)
 
 
 class AsyncDataTransfer(threading.Thread):

@@ -82,6 +82,7 @@ from collections.abc import Iterable, Sized
 import numpy as np
 import pandas as pd
 
+from import_parent_folder import recursive_import
 import global_variables.configurations as cfg
 import global_variables.osrs as go
 import global_variables.path as gp
@@ -91,6 +92,7 @@ from controller.item import remap_item, create_item
 from file.file import File
 from model.item import Item
 from model.transaction import Transaction
+del recursive_import
 
 # import global_values
 # import path
@@ -277,7 +279,7 @@ def process_logs(queue_file: File = gp.f_exchange_log_queue, elog_dir: str = gp.
     if add_current:
         to_do.append(gp.f_runelite_exchange_log)
     queue_data = ['item_id', 'timestamp', 'is_buy', 'quantity', 'price']
-    
+    print(to_do)
     if not queue_file.exists():
         queue = []
         queue_file.save(queue)
@@ -300,6 +302,10 @@ def process_logs(queue_file: File = gp.f_exchange_log_queue, elog_dir: str = gp.
     new_subs = []
     for log_file in to_do:
         incomplete_log = log_file.path == gp.f_runelite_exchange_log.path
+        if not os.path.exists(log_file):
+            print(f"\tNon-existent log file at {log_file}")
+            continue
+        
         # This is a list with all lines that have been parsed and will be archived at some point.
         with open(log_file.path, 'r') as log:
             n_added, as_npy = 0, []

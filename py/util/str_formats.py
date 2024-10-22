@@ -11,9 +11,11 @@ import math
 import os
 import time
 from collections import namedtuple
+from collections.abc import Callable
 
+from import_parent_folder import recursive_import
 import global_variables.values as gv
-
+del recursive_import
 
 def del_chars(input_string, to_remove: str) -> str:
     """ Iterate over chars in `to_remove` and remove each char from `input_string` """
@@ -78,10 +80,10 @@ def unix_(unix_ts: (int or float) = time.time(), fmt_str: str = '%d-%m-%y %H:%M:
     return time.strftime(fmt_str, time.gmtime(unix_ts) if utc else time.localtime(unix_ts))
 
 
-def delta_t(n: (int, float), days: bool = True, allow_ms: bool = True) -> str:
+def delta_t(n: (int, float), days: bool = True, allow_ms: bool = True, t_getter: Callable = time.perf_counter) -> str:
     """ Convert an amount of seconds `n` into days, hours, minutes, seconds. Return as 'Dd HH:MM:SS' or 'HH:MM:SS'. """
     if n >= 864000:
-        n = time.time()-n
+        n = t_getter()-n
     
     if isinstance(n, float):
         ms, n = math.modf(n)
@@ -98,9 +100,15 @@ def delta_t(n: (int, float), days: bool = True, allow_ms: bool = True) -> str:
         f"{n // 3600:0>2}:{n % 3600 // 60:0>2}:{max(1, n % 60):0>2}{f'.{ms*1000:.0f}' if ms > 0 else ''}"
 
 
-def passed_time(n: int or float, days: bool = True) -> str:
+def passed_time(n: int or float, days: bool = True, t_getter: Callable = time.time) -> str:
     """ Convert the amount of passed time relative to unix timestamp `n` and format it with fmt.delta_t() """
-    return delta_t(n=int(time.time()-n), days=days)
+    return delta_t(n=int(t_getter()-n), days=days)
+
+
+def passed_pc(n: int or float, days: bool = True) -> str:
+    """ Convert the amount of passed time relative to unix timestamp `n` and format it with fmt.delta_t() """
+    d = time.perf_counter()-n
+    return delta_t(n=d if d < 10 else int(d), days=days)
 
 
 def dow(unix_ts: int or float, utc: bool = False, shortened: bool = False) -> str:

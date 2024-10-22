@@ -16,6 +16,7 @@ import time
 from collections.abc import Iterable
 from typing import List
 
+from import_parent_folder import recursive_import
 import global_variables.osrs as go
 import global_variables.path as gp
 import util.file as uf
@@ -24,6 +25,8 @@ import util.str_formats as fmt
 from file.file import File
 from model.database import Database
 from model.timeseries import TimeseriesDB
+del recursive_import
+
 
 select_list = [
     "SELECT 0 AS src, timestamp, price, volume FROM 'wiki' WHERE item_id=? AND timestamp < ?",

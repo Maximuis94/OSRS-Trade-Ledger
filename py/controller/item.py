@@ -2,28 +2,30 @@
 This module contains the model for an OSRS item
 
 """
-
+import pickle
 import sqlite3
 from collections.abc import Iterable
 from typing import List, Tuple
 
 import numpy as np
 
-import sqlite.row_factories
+from import_parent_folder import recursive_import
+from backend.download import realtime_prices
 from global_variables.importer import *
+from model.data_source import SRC
 from model.database import Database
 from model.item import Item
-from model.data_source import SRC
-import global_variables.variables as var
-from backend.download import realtime_prices
+from sqlite.row_factories import factory_dict
+
+del recursive_import
 
 target_prices_eval_t0 = 1714065700 #int(time.time() - gc.timespan_target_prices_eval*86400)
 eval_t1 = int(time.time())
 
-itemdb = sqlite3.connect(gp.f_db_local)
+_itemdb = sqlite3.connect(gp.f_db_local)
 
 
-def create_item(item_id: int) -> Item:
+def create_item(item_id: int, itemdb: sqlite3.Connection = None, read_only: bool = False) -> Item:
     """
     Create a new Item instance, provided `item_id` does not exist within the item database.
     The item should have a reference id logged somewhere to validate its existence. If it does, collect data from
@@ -34,6 +36,10 @@ def create_item(item_id: int) -> Item:
     ----------
     item_id : int
         The item_id of the Item that is to be created
+    itemdb : sqlite3.Connection, optional, None by default
+        Can be passed to use a different connection instead
+    read_only : bool, optional, False by default
+        If True, itemdb connection will be used for SELECT statements only
 
     Returns
     -------
@@ -54,9 +60,15 @@ def create_item(item_id: int) -> Item:
     are inserted as soon as possible.
     """
     # TODO step 1: check if item reference exists
+    if itemdb is None:
+        itemdb = _itemdb
+    elif not itemdb:
+        itemdb = sqlite3.connect(database=f"file:{gp.f_db_local}?mode=ro", uri=True)
+    
     try:
         # exists = go.id_name[item_id] is not None
         # print(itemdb.execute("""SELECT * FROM item WHERE item_id=?""", (item_id,)).fetchone())
+        # print(item_id, type(item_id))
         return Item(*itemdb.execute("""SELECT * FROM item WHERE item_id=?""", (item_id,)).fetchone())
         # if isinstance(i, Item):
         #     return i
@@ -65,7 +77,25 @@ def create_item(item_id: int) -> Item:
     except IndexError:
         raise ValueError(f'No valid reference could be found for item_id={item_id}. If the item was added recently, '
                          f'item data')
-    raise
+    except TypeError as e:
+        print(f'TypeError for item_id={item_id} ')
+        if read_only:
+            raise e
+        # db = pickle.load(open(gp.f_db_rbpi_item, 'rb'))
+        # db = db.loc[db['item_id'] == item_id].iloc[0].to_dict()
+        # con = sqlite3.connect(gp.f_db_local)
+        from sqlite.databases import item
+        # print(item.columns)
+        db = sqlite3.connect(gp.f_db_rbpi_item)
+        db.row_factory = factory_dict
+        e = augment_itemdb_entry(Item(**db.execute("SELECT * FROM 'itemdb' WHERE item_id=?", (item_id,)).fetchone())).__dict__
+        # print({k: e.get(k) for k in item.columns})
+        # exit(123)
+        print(item.insert_dict, {k: e.get(k) for k in item.columns})
+        itemdb.execute(item.insert_dict, {k: e.get(k) for k in item.columns})
+        itemdb.commit()
+        # con.close()
+        raise e
     
     # TODO step 2: define item attributes and assign values
     
@@ -263,7 +293,7 @@ class ItemController(Database):
     
     def insert_item(self, item: Item):
         """ Insert `item` as a new entry into the database. NB this will only create a new row! """
-        raise NotImplementedError("Added @ 26-06")
+        # raise NotImplementedError("Added @ 26-06")
         self.insert_rows(table_name=self.table_name, rows=[item.sql_row()], replace=False)
     
     def update_item(self, item: Item, attribute_subset: Iterable = None, replace: bool = True,

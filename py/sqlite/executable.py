@@ -1,12 +1,8 @@
 """
-This module contains various methods for generating executable sql statements, given a set of
-varying inputs.
+This module contains various methods for generating executable sql statements, with various clauses.
 
-Although it may not always be the most efficient approach, methods are designed to enforce some
-consistency across sql statements executed. Aside from that, this module also serves as a reference/cheatsheet.
-
-This module contains only methods for generating executable sql statements. Method docstrings have additional examples
-related to the sql statement / clause it generates.
+Due to vulnerabilities, it is not recommended to use string formatters to generate sqlite statements during execution.
+Methods in here are perfectly suitable to craft an executable statement in advance, however.
 
 
 References
@@ -23,8 +19,10 @@ setup.database
     Module with methods that generate the databases used in the project
 
 """
+import sqlite3
 from collections import namedtuple
-from typing import Iterable, Dict, Tuple
+from collections.abc import Container
+from typing import Iterable, Dict, Tuple, NamedTuple
 
 SqlWhere = namedtuple('SqlWhere', ['column_name', 'key', 'equal', 'identical', 'is_dict'], defaults=[False, False, True])
 
@@ -178,10 +176,75 @@ def create_sql():
     return sql[:-2] + ' )'
 
 
+class Select(NamedTuple):
+    """
+    One or more columns that are to be selected. It is possible to combine multiple Select instances.
+    
+    """
+    columns: str or Iterable[str]
+
+    alias: str = None
+    distinct: bool = False
+    
+    def __repr__(self):
+        if isinstance(self.columns, str):
+            self.columns = [self.columns]
+        return f'''{"DISTINCT " if self.distinct else ""}
+                {str(self.columns)[1:-1]}
+                {"" if self.alias is None else f" AS {self.alias}"}, '''
+    
+    @staticmethod
+    def combine(*select):
+        """ Combine a set of Select instances into a Select clause """
+        if len(select) == 1:
+            return f"SELECT {select} "
+        
+        sql = f"SELECT {select}"
+        for s in select:
+            sql += str(s)
+        return sql.rstrip(", ")
+    
+class From(NamedTuple):
+    tables_subqueries: Iterable[str] = None
+    join_clause: str = None
+    
+    def __repr__(self):
+        if self.join_clause is not None or isinstance(self.tables_subqueries, str):
+            return f"FROM {self.join_clause} "
+        
+        if self.tables_subqueries is None:
+            raise ValueError("Either pass tables/subqueries or a join_clause")
+        elif isinstance(self.tables_subqueries, str):
+            return f"FROM {self.tables_subqueries} "
+        
+        sql = "FROM "
+        for el in self.tables_subqueries:
+            sql += f"{el}, "
+        return f"FROM {str(self.tables_subqueries)[1:-1]} "
+    
+
+
 def select_sql(table: str, columns: str or Iterable = '*', where: str = None, order_by: str = None,
                group_by: str = None, limit: int or Tuple[int, int] = None) -> str:
+    """
+    Generate an executable SQLite SELECT statement
     
-    sql = f"""SELECT {columns if isinstance(columns, str) else str(tuple(columns))} FROM "{table}" """
+    Parameters
+    ----------
+    table : str
+        Name of the table/subquery/join-clause the SELECT applies to
+    columns : str or Iterable[str]
+    where :
+    order_by :
+    group_by :
+    limit :
+
+    Returns
+    -------
+
+    """
+    
+    sql = f"""SELECT {columns if isinstance(columns, str) else str(tuple(columns))[1:-1]} FROM "{table}" """
     
     if where is not None:
         sql += where if isinstance(where, str) else where_clause(conditions=where)
@@ -362,8 +425,16 @@ def generate_foreign_key(name: str, column: str, reference_table: str, reference
 #         s += f' {operator} {value}'
 
 
+def insert(table: str, columns: Container, values: Container, schema: str = None, replace: bool = False):
+    """ Official docs: https://www.sqlite.org/lang_insert.html """
+
+
 
 
 if __name__ == '__main__':
-    print()
-    ...
+    import global_variables.path as gp
+    
+    db = sqlite3.connect(database=f"file:D:/osrs_batch_archive/backup_timeseries?mode=ro", uri=True)
+    sql = """SELECT item_id, """
+    print(db.execute(""))
+    

@@ -6,8 +6,10 @@ Module with pre-defined osrs-related variables like item_id lists, item_id-item_
 """
 import sqlite3
 
+from import_parent_folder import recursive_import
 import global_variables.path as gp
 import util.osrs as uo
+del recursive_import
 
 # User agent passed when making certain http requests
 _item_table = 'item'

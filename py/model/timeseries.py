@@ -1,5 +1,20 @@
 """
 Module for modelling timeseries data
+
+Timeseries datapoints consists of an item_id, source (src), timestamp (ts), price, volume.
+The item_id refers to an OSRS item_id
+The source indicates the type of data. It is encoded with values ranging from 0-4; 0=wiki, avg5m (1=buy, 2=sell),
+realtime (3=buy, 4=sell). It is typically abreviated as 'src'
+The timestamp, price and volume are the UNIX timestamp, price and volume of the datapoint.
+
+Realtime datapoints (src=3, 4) do not have a volume, which is set to 0 in data structures.
+While src is a discrete value, the other values are continuous and non-negative. 0 is typically used for missing values,
+although this should only occur in the volume column
+
+
+
+
+
 In this module, various timeseries datapoints are modelled.
 Timeseries data is characterized by its x-axis, which is chronologically ascending scale. Throughout this project, the
 x-axis of timeseries data consists of unix timestamps.
@@ -44,7 +59,9 @@ from collections.abc import Iterable
 from typing import List, Dict, Callable, NamedTuple, Tuple
 
 import pandas as pd
+from multipledispatch import dispatch
 
+from import_parent_folder import recursive_import
 import global_variables.configurations as cfg
 import global_variables.osrs as go
 import global_variables.path as gp
@@ -53,11 +70,86 @@ import util.str_formats as fmt
 from controller.item import create_item
 from global_variables.data_classes import TimeseriesRow, NpyDatapoint
 from model.database import Database
+del recursive_import
 
 queried_item_id = None
 queried_timestamp = None
 item = create_item(2)
 np_ar_start = [queried_item_id, queried_timestamp]
+ts_start = int(time.time())
+
+
+
+def sql_timeseries_insert(item_id: int, src: int = None, replace: bool = True) -> str:
+    """ Return an INSERT / INSERT OR REPLACE statement for table item`item_id`  """
+    return f"""INSERT {'OR REPLACE ' if replace else ''}INTO "item{item_id:0>5}"
+            (src, timestamp, price, volume) VALUES ({'?' if src is None else src}, ?, ?, ?)"""
+
+
+def sql_create_timeseries_item_table(item_id: int, check_exists: bool = True) -> str:
+    """ Returns an executable SQL statement for creating a timeseries table for a specific item """
+    return f"""CREATE TABLE {"IF NOT EXISTS " if check_exists else ""}"item{item_id:0>5}"(
+            "src" INTEGER NOT NULL CHECK (src BETWEEN 0 AND 4),
+            "timestamp" INTEGER NOT NULL,
+            "price" INTEGER NOT NULL DEFAULT 0 CHECK (price>=0),
+            "volume" INTEGER NOT NULL DEFAULT 0 CHECK (volume>=0),
+            PRIMARY KEY(src, timestamp) )"""
+
+
+"""
+The methods below can be used to for execute calls to an sqlite db via *get_timeseries_select(...). The bottom method
+has a more detailed explanation
+"""
+
+
+@dispatch(int, tuple or None)
+def sql_timeseries_select(item_id: int, columns: Tuple[str] = None) -> Tuple[str, tuple]:
+    """ Get a timeseries SELECT statement and the tuple needed to execute it """
+    return f"""SELECT {str(columns) if isinstance(columns, tuple) else '*'} FROM 'item{item_id:0>5}'""", empty_tuple
+
+
+@dispatch(int, int, tuple or None)
+def sql_timeseries_select(item_id: int, src: int, columns: Tuple[str] = None) -> Tuple[str, tuple]:
+    """ Get a timeseries SELECT statement and the tuple needed to execute it """
+    return f"""SELECT {str(columns) if isinstance(columns, tuple) else '*'} FROM 'item{item_id:0>5}' WHERE src=?""", \
+           (src,)
+
+
+@dispatch(int, int, int or float, tuple or None)
+def sql_timeseries_select(item_id: int, src: int, t0: int or float, columns: tuple = None) -> Tuple[str, tuple]:
+    """ Get a timeseries SELECT statement and the tuple needed to execute it """
+    return f"""SELECT {str(columns) if isinstance(columns, tuple) else '*'} FROM 'item{item_id:0>5}'
+                WHERE src=? AND timestamp >= ?""", (src, t0)
+
+
+@dispatch(int, int, int or float, int or float, tuple or None)
+def sql_timeseries_select(item_id: int, src: int, t0: int or float, t1: int or float, columns: Tuple[str] = None) -> \
+        Tuple[str, tuple]:
+    """
+    Fetch timeseries select statement + corresponding tuple, specifying an `item_id`, `src`, `t0` and `t1`. It is also
+    possible to specify the following combinations of input args;
+    item_id OR item_id, src OR item_id, src, t0 OR item_id, src, t0, t1
+    
+    Parameters
+    ----------
+    item_id : int
+        item_id for which timeseries data is needed
+    src : int, optional
+        Source of the data that should be fetched
+    t0 : int, optional
+        Lower bound timestamp. If given, only return rows with a higher timestamp than `t0`
+    t1 : int, optional
+        Upper bound timestamp. If given, only return rows with a lower timestamp than `t1`
+    columns: str or tuple, optional, None by default
+        Columns to fetch from the timeseries database. If unspecified or not passed as tuple, '*' is set as columns
+
+    Returns
+    -------
+    Tuple[str, tuple]
+        A tuple with an executable SELECT statement, as well as the parameters needed to execute the statement. Can be
+        used as Sqlite3.Connection.execute(*get_timeseries_select(...))
+    """
+    return f"""SELECT {str(columns) if isinstance(columns, tuple) else '*'} FROM 'item{item_id:0>5}' WHERE src=? AND timestamp BETWEEN ? AND ?""", (src, t0, t1)
 
 
 class TimeseriesDB(Database):
@@ -91,8 +183,8 @@ class TimeseriesDB(Database):
         
         self.ro_con, self.cursors = sqlite3.connect(database=f'file:{self.path}?mode=ro', uri=True), {}
         for key, factory in zip((0, tuple, dict, -1, 1),
-                       (fac.factory_single_value, fac.factory_tuple, fac.factory_dict,
-                        self.factory_datapoint, self.factory_datapoint_item_id)):
+                                (fac.factory_single_value, fac.factory_tuple, fac.factory_dict,
+                                 self.factory_datapoint, self.factory_datapoint_item_id)):
             cursor = self.ro_con.cursor()
             cursor.row_factory = factory
             self.cursors[key] = cursor
@@ -100,10 +192,6 @@ class TimeseriesDB(Database):
     def insert_table_name(self, sql: str, item_id: int) -> str:
         """ Return the sql statement with a table name corresponding to `item_id` instead of 3 underscores """
         return sql.replace("___", f'"item{item_id:0>5}"')
-        
-    def get_sql_insert(self, item_id: int, replace: bool) -> str:
-        """ Get a sqlite insert statement for `item_id` that allows for replacing (or not) """
-        return self.insert_table_name(self.insert_replace if replace else self.insert, item_id)
     
     def get_sql_create(self, item_id: int) -> str:
         return self.insert_table_name(self.create_table, item_id)
@@ -111,10 +199,10 @@ class TimeseriesDB(Database):
     def auto_create_table(self, e: sqlite3.Error, item_id: int, con: sqlite3.Connection) -> bool:
         """ Create a table for `item_id` through database connection `con`, but only if `item_id` is a valid item_id """
         if "no such table" in str(e) and item_id in self.item_ids:
-            con.execute(self.get_sql_create(item_id))
+            con.execute(sql_create_timeseries_item_table(item_id, False))
             return True
         return False
-        
+    
     def insert_row(self, item_id: int, src: int, timestamp: int, price: int, volume: int,
                    con: sqlite3.Connection = None, commit_data: bool = False, replace: bool = True) -> bool:
         """
@@ -155,10 +243,10 @@ class TimeseriesDB(Database):
         try:
             global queried_item_id
             queried_item_id = item_id
-            con.execute(self.get_sql_insert(item_id, replace), (src, timestamp, price, volume))
+            con.execute(sql_timeseries_insert(item_id, replace), (src, timestamp, price, volume))
         except sqlite3.OperationalError as e:
             if self.create_missing_tables and self.auto_create_table(e, item_id, con):
-                con.execute(self.get_sql_insert(item_id, replace), (src, timestamp, price, volume))
+                con.execute(sql_timeseries_insert(item_id, replace), (src, timestamp, price, volume))
                 
         if commit_data:
             con.commit()
@@ -199,10 +287,10 @@ class TimeseriesDB(Database):
         try:
             global queried_item_id
             queried_item_id = item_id
-            con.executemany(self.get_sql_insert(item_id, replace), rows)
+            con.executemany(sql_timeseries_insert(item_id, replace), rows)
         except sqlite3.OperationalError as e:
             if self.create_missing_tables and self.auto_create_table(e, item_id, con):
-                con.executemany(self.get_sql_insert(item_id, replace), rows)
+                con.executemany(sql_timeseries_insert(item_id, replace), rows)
     
         if commit_data:
             con.commit()
@@ -260,7 +348,7 @@ class TimeseriesDB(Database):
         """ Return the npy array timestamp lower- and upper- bound as a tuple """
         t1 = self.cursors.get(0).execute("""SELECT MAX(timestamp) FROM "item00002" WHERE src in (1, 2)""").fetchone()
         t1 = t1 - t1 % 14400
-        return t1 - t1 % 86400 - cfg.npy_db_timespan * 86400, t1
+        return t1 - t1 % 86400 - cfg.npy_db_timespan_days * 86400, t1
         
     @staticmethod
     def factory_datapoint_item_id(c: sqlite3.Cursor, row: tuple) -> TimeseriesDatapoint:
@@ -271,7 +359,7 @@ class TimeseriesDB(Database):
     def factory_datapoint(c: sqlite3.Cursor, row: tuple) -> TimeseriesDatapoint_noid:
         """ Parse timeseries rows as a labelled tuple """
         return TimeseriesDB.TimeseriesDatapoint_noid(*row)
-        
+    
 
 class Timeseries(ABC):
     """
@@ -317,6 +405,12 @@ class Timeseries(ABC):
 
 
 if __name__ == "__main__":
+    print(sql_timeseries_select(2))
+    print(sql_timeseries_select(2, 0))
+    print(sql_timeseries_select(2, 0, ts_start - 86400))
+    print(sql_timeseries_select(2, 0, ts_start - 86400, ts_start))
+    exit(12)
+    
     print(create_item(2).__dict__)
     
     tsdb = TimeseriesDB()

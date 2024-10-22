@@ -14,12 +14,14 @@ import urllib.request
 import requests
 from bs4 import BeautifulSoup
 
+from import_parent_folder import recursive_import
 import global_variables.configurations as cfg
 import global_variables.osrs as go
 import global_variables.path as gp
 import global_variables.values as val
 import util.str_formats as fmt
 import util.unix_time as ut
+del recursive_import
 
 _request_header = {
     'User-Agent': 'Homemade GE trading GUI/DB | Disc: Maximuis94'

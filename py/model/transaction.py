@@ -17,9 +17,11 @@ from abc import ABC, abstractmethod
 
 from overrides import override
 
+from import_parent_folder import recursive_import
 from global_variables.importer import *
 from model.item import Item
 from global_variables.data_classes import Transaction as _Transaction
+del recursive_import
 
 
 # from model.database import Database as Db

@@ -12,10 +12,11 @@ from typing import Dict
 
 import pandas as pd
 
+from import_parent_folder import recursive_import
 import sqlite.row_factories
 import util.str_formats as fmt
 import sqlite.row_factories as row_factory
-
+del recursive_import
 
 def connect(path: str, read_only: bool = True) -> sqlite3.Connection:
     """ Connect to the sqlite database located at `path`. If `read_only`, establish a read-only connection. """

@@ -8,9 +8,11 @@ from collections import namedtuple
 from collections.abc import Iterable
 from enum import Enum
 
+from import_parent_folder import recursive_import
 import sqlite.row_factories
 from global_variables.importer import *
 from model.database import Database
+del recursive_import
 
 
 # def load_item_data(con: sqlite3.Connection) -> [list, list, list, dict, dict]:

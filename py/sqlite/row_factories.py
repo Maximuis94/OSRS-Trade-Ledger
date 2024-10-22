@@ -1,14 +1,27 @@
 """
-This module contains all of the row factory methods used throughout the project. A row factory is a Callable that 
-dictates how rows will be parsed from the database. For instance, factory_dict converts rows into dicts with column 
-names as key.
+This module contains various row factories that can be configured. A row factory is the method that dictates how a
+single row is returned after extracting it from a sqlite database. While it can simply cast the original output into
+something else, the row factory can also be used to add/modify values.
+When implementing a custom row factory, keep in mind that this method is executed for every row that is extracted.
 
-Tables typically have their own tuple factory that produces a named tuple. Alternatively, there are also entity 
-factories. Which factory works best depends on the query, although it is possible to simply restrict yourself to basic 
-dict / tuple factories.
+Factory implementations listed below typically return builtin types (dict, list, ...). Aside from that, they are kept
+simple follow very generic use cases.
 
-Each method in this module can be set as a row factory. A row factory should have the following signature;
-def row_factory(c: sqlite3.Cursor, row: tuple)
+Tables (as defined within this package) typically have their own row factory that produces a named tuple. Alternatively,
+ there are also entity factories. Which factory works best depends on the query and the use case.
+In terms of resources used and runtime, native sqlite3 implementations with optimized sql statements generally
+outperform additional layers designed to improve developer experience.
+In some cases, certain custom row factories tend to synergize well with specific sql statements (e.g. combining a dict
+factory with GROUP BY statements).
+Although it is likely to have a negative impact on performance, custom row factories can be very useful to verify the
+output that is returned via more complex evaluations, among others.
+
+Each method in this module can be set as a row factory. Row factory methods should follow the following format;
+    def custom_row_factory(c: sqlite3.Cursor, row: tuple) -> ...:
+
+They can be bound to a sqlite3.Cursor object;
+sqlite3.Cursor.row_factory = custom_row_factory
+Queried rows will be passed to this method and return whatever the method returns, given the input.
 
 See Also
 --------
@@ -27,20 +40,26 @@ import sqlite3
 from collections.abc import Callable
 from enum import Enum
 
+from import_parent_folder import recursive_import
 from global_variables.data_classes import TimeseriesDatapoint
 from global_variables.variables import types, SqliteSchema
 from global_variables.data_classes import *
+del recursive_import
 
 
 def factory_idx0(c: sqlite3.Cursor, row: tuple):
-    """ Return the first element of `row` """
+    """ Returns the first element of `row` """
     return row[0]
 
 
 def factory_tuple(c: sqlite3.Cursor, row: tuple) -> tuple:
-    """ Return the `row` as a regular tuple, like it does by default """
-    # TODO
+    """ Default row factory; added for the sake of completeness """
     return row
+
+
+def factory_list(c: sqlite3.Cursor, row: tuple) -> list:
+    """ Return the `row` as a list """
+    return list(row)
 
 
 def factory_dict(c: sqlite3.Cursor, row: tuple) -> dict:

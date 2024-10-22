@@ -12,6 +12,7 @@ generating certain methods, e.g. for fetching attribute names, string representa
 NamedTuple
 A namedtuple is a basic dataclass that works like a tuple, but its elements can be accessed via a label, e.g.
 <NamedTuple>.<Label>.
+<NamedTuple>.<Label>.
 In terms of runtime it is slightly slower than a tuple, but faster than a dict, which makes it a compromise between
 readability and performance.
 
@@ -34,12 +35,16 @@ from abc import ABC, abstractmethod
 from collections import namedtuple
 from collections.abc import Sequence
 from dataclasses import dataclass, field
-from typing import Tuple
+from typing import Tuple, NamedTuple
 
 import numpy as np
 from overrides import override
 
+from import_parent_folder import recursive_import
 import global_variables.path as gp
+from file.file import IFile
+
+del recursive_import
 
 
 #######################################################################################################################
@@ -85,14 +90,6 @@ IndexTuple = namedtuple('IndexTuple', ['name', 'columns'])
 
 ExeLogEntry = namedtuple('ExeLogEntry', ['transaction_id', 'timestamp', 'price', 'balance', 'profit', 'value',
                                          'n_bought', 'n_purchases', 'n_sold', 'n_sales'])
-
-RbpiDb = namedtuple('RbpiDb', ['path', 'table'])
-rbpi_dbs = {
-    'avg5m': RbpiDb(gp.f_db_rbpi_avg5m, 'avg5m'),
-    'realtime': RbpiDb(gp.f_db_rbpi_realtime, 'realtime'),
-    'wiki': RbpiDb(gp.f_db_rbpi_wiki, 'wiki'),
-    'item': RbpiDb(gp.f_db_rbpi_item, 'itemdb')
-}
 
 
 @dataclass(order=True, match_args=True)
@@ -158,21 +155,22 @@ class PlotStats:
     y_distribution: Tuple[_ytype, _ytype, _ytype, _ytype, _ytype]
     n: int
     
-
-def get_plotstats(x: Sequence, y: list) -> PlotStats:
-    y.sort()
-    n = len(y)
-    return PlotStats(
-        t0=x[0],
-        t1=x[-1],
-        delta_t=x[-1]-x[0],
-        y_min=min(y),
-        y_max=max(y),
-        y_avg=sum(y)/len(y),
-        y_std=float(np.std(y)),
-        y_distribution=(y[int(.1*n)], y[int(.25*n)], y[int(.5*n)], y[int(.75*n)], y[int(.9*n)]),
-        n=n
-    )
+    @staticmethod
+    def get(x: Sequence, y: list):
+        y.sort()
+        n = len(y)
+        
+        return PlotStats(
+            t0=x[0],
+            t1=x[-1],
+            delta_t=x[-1] - x[0],
+            y_min=min(y),
+            y_max=max(y),
+            y_avg=sum(y) / len(y),
+            y_std=float(np.std(y)),
+            y_distribution=(y[int(.1 * n)], y[int(.25 * n)], y[int(.5 * n)], y[int(.75 * n)], y[int(.9 * n)]),
+            n=n
+        )
 
 
 # Transferred batches are saved as lists of Rows.
@@ -345,7 +343,7 @@ class Item:
     remap_quantity: float = field(default=0, compare=False)
     target_buy: int = field(default=0, compare=False)
     target_sell: int = field(default=0, compare=False)
-    item_group: str = field(default=0, compare=False)
+    item_group: str = field(default='', compare=False)
     
     # Live trade data -- Not from local db item table
     current_ge: int = field(default=0, compare=False)
@@ -361,6 +359,11 @@ class Item:
     n_avg5m_s: int = field(default=-1, compare=False)
     n_rt_b: int = field(default=-1, compare=False)
     n_rt_s: int = field(default=-1, compare=False)
+    
+    @staticmethod
+    def sqlite_columns():
+        """ Return the columns of the Item as stored in the sqlite database """
+        return Item.__match_args__[:18]
     
 
 @dataclass(eq=False, match_args=True)
