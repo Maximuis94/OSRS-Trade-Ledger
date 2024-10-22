@@ -6,10 +6,12 @@ import os
 import time
 from collections.abc import Iterable
 
+from import_parent_folder import recursive_import
 import global_variables.classes as _cls
 from global_variables.importer import *
 from model.database import Database
 
+del recursive_import
 
 class DatabaseController(Database):
     """

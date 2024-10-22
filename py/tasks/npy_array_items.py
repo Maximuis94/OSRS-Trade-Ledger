@@ -18,11 +18,12 @@ from collections.abc import Iterable
 
 import numpy as np
 
+from import_parent_folder import recursive_import
 import global_variables.configurations as gc
 import global_variables.osrs as go
 import global_variables.path as gp
 import util.kw_parser as kw_
-
+del recursive_import
 
 def np_ar_include_if_min_transactions(threshold: int = 150, **kwargs) -> bool:
     """ Include an item in array updates if it has `n` or more transactions """

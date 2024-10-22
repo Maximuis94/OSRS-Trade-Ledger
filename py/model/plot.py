@@ -5,8 +5,10 @@ Model class for a plot
 import sqlite3
 from collections.abc import Callable
 
-from global_variables.data_classes import get_plotstats
+from import_parent_folder import recursive_import
+from global_variables.data_classes import PlotStats
 from sqlite.row_factories import timeseries_row_factory
+del recursive_import
 
 
 class Plot:
@@ -71,7 +73,7 @@ class Plot:
                 xy = process_datapoint(xy, dp)
             self.xy = xy
         
-        self.stats = get_plotstats(self.x, self.y)
+        self.stats = PlotStats.get(self.x, self.y)
         self.x, self.y = tuple(self.x), tuple(self.y)
     
     def __repr__(self):

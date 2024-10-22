@@ -5,8 +5,11 @@ Databases are composed via a set of Tables, which are in turn composed via a set
 The databases as they are defined here should correspond with the column orderings as implemented in sqlite.row
 """
 
+from import_parent_folder import recursive_import
 from global_variables.path import f_db_local, f_db_timeseries
 from model.table import Column, Table
+del recursive_import
+
 
 avg5m = Table(table_name='avg5m', db_file=f_db_timeseries,
               columns=[

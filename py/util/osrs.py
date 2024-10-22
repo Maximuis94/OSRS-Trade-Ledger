@@ -8,10 +8,12 @@ import time
 
 import pandas as pd
 
+from import_parent_folder import recursive_import
 import backend.download as dl
 import global_variables.path as gp
 import util.file as uf
-import sqlite.executable_statements
+import sqlite.executable
+del recursive_import
 
 debug = False
 

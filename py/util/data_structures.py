@@ -7,10 +7,12 @@ import sqlite3
 from collections.abc import Iterable
 from typing import List, Dict, Callable, NamedTuple, Tuple
 
+
+from import_parent_folder import recursive_import
 import global_variables.variables as var
 from file.file import File
 from global_variables.data_classes import TimeseriesRow, Avg5mDatapoint, RealtimeDatapoint, WikiDatapoint
-
+del recursive_import
 
 def get_sorted_tuple(_list, reverse_sort: bool = False) -> tuple:
     """ Convert `_list` to a list, sort it and return it as a tuple. """

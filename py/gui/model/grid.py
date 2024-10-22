@@ -3,7 +3,8 @@ Module for the TkGrid, which is a grid that accepts a list of strings and assign
 tag the appropriate space in the GUI.
 
 The idea behind the grid is to allow one to easily alter the way the gui is organized, without having to alter variables
-across multiple instances of widgets. Instead, alter the list of strings.
+across multiple instances of widgets. Instead, alter the list of strings. The list of strings is converted into a grid
+representation, where each Widget is encoded as a char
 
 
 

@@ -3,13 +3,163 @@ This module contains various methods for analyzing data for a specific item
 
 TODO methods have not yet been redesigned for new db structure
 """
+import datetime
+import math
+import os
 import sqlite3
+from collections import namedtuple
+from collections.abc import Iterable, Container, Sized
+from typing import List, Tuple, Dict, NamedTuple
 
 import numpy as np
 import pandas as pd
+from multipledispatch import dispatch
 
+from import_parent_folder import recursive_import
 from global_variables.importer import *
 from model.item import Item
+from data_processing import util_proc as ud
+del recursive_import
+
+
+# El = namedtuple('El', ['t0', 't1', 'avg', 'relative'])
+
+class El(NamedTuple):
+    item_id: int
+    attribute_name: str
+    t0: int
+    t1: int
+    avg: int or float
+    relative: int or float
+    round_avg: bool = True
+    
+    def __repr__(self):
+        if self.round_avg:
+            avg = int(round(self.avg, 0))
+        else:
+            avg = self.avg if math.modf(self.avg)[0] != 0 else int(self.avg)
+        return f"{ut.utc_unix_dt(self.t0)}-{ut.utc_unix_dt(self.t1-1).time()}:\t" \
+               f"{avg}\t{self.relative if math.modf(self.relative)[0] != 0 else int(self.relative)}"
+    
+    def __repr_dict__(self, previous_row) -> dict:
+        """ Return this object as a dict, designed to insert into csv files """
+        if self.round_avg:
+            avg = int(round(self.avg, 0))
+        else:
+            avg = self.avg if math.modf(self.avg)[0] != 0 else int(self.avg)
+        try:
+            if previous_row is not None:
+                print('\t\t\t', previous_row.avg if math.modf(previous_row.avg)[0] != 0 else int(previous_row.avg))
+                previous_average = f"{100*(round(1 / (previous_row.avg / avg), 4)-1):.1f}%"
+            else:
+                previous_average = ''
+        except Exception as e:
+            print(f'Exception {e}')
+            previous_average = 'NA'
+            
+        dt0, dt1 = ut.utc_unix_dt(self.t0), ut.utc_unix_dt(self.t1-1)
+        # return {'item_name': go.id_name[self.item_id], 'attribute_name': self.attribute_name, 'dow': dt0.strftime("%A"),
+        #         'date': dt0.date(), 't0': f"{dt0.time()}", 't1': f"{dt1.time()}",
+        #         'average': avg, 'relative': self.relative if math.modf(self.relative)[0] != 0 else int(self.relative),
+        #         'relative_previous': previous_average}
+        return {'dow': dt0.strftime("%A"), 'date': dt0.date(), 't0': f"{dt0.time()}", 't1': f"{dt1.time()}",
+                'average': avg, 'relative': self.relative if math.modf(self.relative)[0] != 0 else int(self.relative),
+                'relative_previous': previous_average}
+
+# @dispatch(list or tuple, str, dict)
+# def compare_npy_data(datetimes: List[datetime.datetime] or Tuple[datetime.datetime],
+#                      attribute_name: str, **kwargs):
+#     compare_npy_data(datetimes, [attribute_name], **kwargs)
+
+
+# @dispatch(list or tuple, list or tuple, dict)
+def compare_npy_data(datetimes: List[datetime.datetime] or Tuple[datetime.datetime],
+                     attribute_names: List[str] or Tuple[str], **kwargs) -> Dict[Tuple[int, str], List[List[El]]]:
+    """
+    Given a set of datetimes, run a comparative analysis in which the first datetime is used as benchmark, while the
+    other values expressed relative
+    
+    Parameters
+    ----------
+    datetimes : List[datetime.datetime or int] or Tuple[datetime.datetime or int]
+        datetimes/timestamps to run the analysis on. The first value will be used as reference, unless `dt0` is passed.
+    attribute_names : List[str] or Tuple[str]
+        List or tuple filled with attribute names that are to be compared.
+        
+    Other Parameters
+    ----------------
+    item_ids : List[int], optional, global_variables.osrs.npy_items by default
+        List of item_ids that should be included in the analysis
+    timespan : int, optional, 86400 by default
+        Temporal distance between two datapoints; t0 is set to the timestamp related to an element in `datetimes`, while
+        t1 is set to t0+86400 (not inclusive)
+    dt0 : datetime.datetime, optional, datetimes[0] by default
+        The datetime to use as reference timestamp. If undefined, it will be set to the first value of `datetimes`.
+    round_timestamp : bool, optional, True by default
+        If True, timestamps in `datetimes` will be floored using `timespan`
+    n_decimals : int, optional, 2 by default
+        Amount of decimals floating points should be rounded down to
+    
+
+    Returns
+    -------
+    results_tupled : Dict[Tuple[int, str], List[List[El]]]
+        Dict with results, of which the keys consist of an item_id, attribute_name and timestamp
+
+    """
+    if len(datetimes) < 2:
+        raise ValueError("Unable to run a comparative analysis on less than two datapoints...")
+    
+    timespan = 86400 if kwargs.get('timespan') is None else kwargs['timespan']
+    item_ids = go.npy_items if kwargs.get('item_ids') is None else kwargs['item_ids']
+    round_timestamp = timespan if kwargs.get('round_timestamp') is None else int(kwargs['round_timestamp'])*timespan
+    n_decimals = 2 if kwargs.get('n_decimals') is None else kwargs['n_decimals']
+    
+    try:
+        dt0 = kwargs['dt0']
+    except KeyError:
+        dt0 = datetimes[0]
+        datetimes = datetimes[1:]
+    
+    if round_timestamp > 0:
+        t0 = int(ut.utc_dt_unix(dt0)/round_timestamp)*round_timestamp
+        dt0 = ut.utc_unix_dt(t0)
+        timestamps = [int(ut.utc_dt_unix(next_dt)/round_timestamp)*round_timestamp for next_dt in datetimes]
+    else:
+        t0 = ut.utc_dt_unix(dt0)
+        timestamps = [ut.utc_dt_unix(next_dt) for next_dt in datetimes]
+        
+    results = {}
+    results_tupled = {}
+    
+    # El.avg captures the average value across all datapoints for a combination of attribute/item within a time interval
+    # El.relative is El.avg relative to the average value of the reference datapoints.
+    
+    def _round(n):
+        """ Round `n` down to the `n_decimals` specified in kwargs """
+        return round(n, n_decimals) if math.modf(n)[0] != 0 else int(n)
+    for i in item_ids:
+        item_results, references = {}, []
+        ref_dps = ud.get_datapoints(i, t0, t0+timespan)
+        for a in attribute_names:
+            ref_values = El(i, a, t0, t0+timespan, ud.avg_dp_value(ref_dps, a, True, 3), 1.0)
+            references.append(ref_values)
+        ts_results = [[references[a_idx]] for a_idx in range(len(attribute_names))]
+        for t_idx, _t0 in enumerate(timestamps):
+            t1 = _t0 + timespan
+            
+            dps: List[ud.Dp] = ud.get_datapoints(i, _t0, t1)
+            
+            for a_idx, a in enumerate(attribute_names):
+                avg = ud.avg_dp_value(dps, a, True, 3)
+                # el =
+                ts_results[a_idx].append(El(i, a, _t0, t1, _round(avg), _round(avg/references[a_idx].avg)))
+            item_results[_t0] = ts_results
+        for a_idx, a in enumerate(attribute_names):
+            results_tupled[(i, a)] = ts_results[a_idx]
+        results[i] = item_results
+    print(timestamps)
+    return results_tupled
 
 
 def check_target_prices() -> (float, float):
@@ -220,24 +370,24 @@ def get_sorted_interval_averages(a: np.ndarray, intervals: list, remove_zeros: b
     return {i: np.average(np.sort(a[int(np.ceil(n * i[0])):int(np.ceil(n * i[1]))])) for i in intervals}
 
 
-def target_prices_exceeded(i: NpyArray, t_min: int = int(time.time() - 86400), t_max: int = int(time.time())):
-    """
-    Determine the fraction of price datapoints that exceed the target buy and target sell price of the given item.
-    If no target_prices are set, it will return 0,  1 as the default target prices are 0
-    :param i: Loaded numpy archive for a specific item
-    :param t_min: Lower bound timestamp
-    :param t_max: Upper bound timestamp
-    :return: tuple of % buy/sell prices smaller/greater or equal to target buy/sell prices
-    """
-    df = pd.DataFrame([{'timestamp': ts, 'buy_price': bp, 'sell_price': sp}
-                       for ts, bp, sp in zip(i.timestamp, i.buy_price, i.sell_price)])
-    df = df.loc[(df['timestamp'] <= t_max) & (df['timestamp'] >= t_min)]
-    df_b, df_s = df.loc[df['buy_price'] > 0], df.loc[df['sell_price'] > 0]
-    b_exceeded = len(df_b.loc[df_b['buy_price'] <= i.target_buy]) / len(df_b)
-    s_exceeded = len(df_s.loc[df_s['sell_price'] >= i.target_sell]) / len(df_s)
-    # print(i.target_buy, b_exceeded)
-    # print(i.target_sell, s_exceeded)
-    return b_exceeded, s_exceeded
+# def target_prices_exceeded(i: NpyArray, t_min: int = int(time.time() - 86400), t_max: int = int(time.time())):
+#     """
+#     Determine the fraction of price datapoints that exceed the target buy and target sell price of the given item.
+#     If no target_prices are set, it will return 0,  1 as the default target prices are 0
+#     :param i: Loaded numpy archive for a specific item
+#     :param t_min: Lower bound timestamp
+#     :param t_max: Upper bound timestamp
+#     :return: tuple of % buy/sell prices smaller/greater or equal to target buy/sell prices
+#     """
+#     df = pd.DataFrame([{'timestamp': ts, 'buy_price': bp, 'sell_price': sp}
+#                        for ts, bp, sp in zip(i.timestamp, i.buy_price, i.sell_price)])
+#     df = df.loc[(df['timestamp'] <= t_max) & (df['timestamp'] >= t_min)]
+#     df_b, df_s = df.loc[df['buy_price'] > 0], df.loc[df['sell_price'] > 0]
+#     b_exceeded = len(df_b.loc[df_b['buy_price'] <= i.target_buy]) / len(df_b)
+#     s_exceeded = len(df_s.loc[df_s['sell_price'] >= i.target_sell]) / len(df_s)
+#     # print(i.target_buy, b_exceeded)
+#     # print(i.target_sell, s_exceeded)
+#     return b_exceeded, s_exceeded
 
 
 def check_target_prices(i: Item, t0: int or float, t1: int or float, target_buy: int = None, target_sell: int = None,
@@ -498,5 +648,64 @@ def get_saturated_items():
     
     # TODO
     raise NotImplementedError
+    
+
+if __name__ == '__main__':
+    dt0 = datetime.datetime(2024, 6, 1)
+    test = compare_npy_data(
+        datetimes=[dt0+datetime.timedelta(days=n) for n in range(61)],
+        # datetimes=[
+        #     datetime.datetime(2024, 7, 18),
+        #     datetime.datetime(2024, 7, 25),
+        #     datetime.datetime(2024, 8, 1),
+        #     datetime.datetime(2024, 8, 8),
+        #     datetime.datetime(2024, 8, 15),
+        #     datetime.datetime(2024, 8, 22),
+        #     datetime.datetime(2024, 8, 29),
+        #     datetime.datetime(2024, 9, 5)],
+        attribute_names=['buy_price', 'sell_price', 'wiki_price', 'wiki_volume'],
+        item_ids=[2, 62, 4697, 5952, 10033]
+    )
+    wd = gp.dir_compare_npy_analysis
+    if not os.path.exists(wd):
+        os.mkdir(wd)
+    df_rows = []
+    item_id = None
+    _wd = None
+    attribute_name = None
+    for k, v in test.items():
+        if item_id is not None and item_id != k[0]:
+            if attribute_name is not None:
+                pd.DataFrame(df_rows).to_csv(_wd + f"{attribute_name}.csv", index=False)
+            # pd.DataFrame(df_rows).to_csv(_wd+f"{attribute_name}.csv", index=False)
+            # df_rows = []
+            
+            # if not os.path.exists(_wd):
+                # os.mkdir(_wd)
+        item_id = k[0]
+        _wd = wd + f"{go.id_name[item_id]}/"
+        if not os.path.exists(_wd):
+            os.mkdir(_wd)
+        print(go.id_name[k[0]], k[1])
+        previous = None
+        # df_rows = []
+        # attribute_name = None
+        for el in v:
+            if not isinstance(el, El):
+                raise RuntimeError
+            if attribute_name is not None and attribute_name != el.attribute_name:
+                pd.DataFrame(df_rows).to_csv(_wd + f"{attribute_name}.csv", index=False)
+                print(_wd + f"{attribute_name}.csv")
+                df_rows = []
+            df_rows.append(el.__repr_dict__(previous_row=previous))
+            attribute_name = el.attribute_name
+            previous = el
+            # print(el.__repr_dict__())
+            print(f'\t{el}')
+        # print(df_rows)
+        print('\n')
+    
+    # print(f)
+    pd.DataFrame(df_rows).to_csv(_wd+f"{attribute_name}.csv", index=False)
     
     

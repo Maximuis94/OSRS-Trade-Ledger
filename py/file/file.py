@@ -7,9 +7,33 @@ import os
 import shutil
 import time
 from collections.abc import Callable, Iterable
-from typing import Dict, Tuple
+from dataclasses import field
+from typing import Dict, Tuple, NamedTuple
 
 from .util import save, load, IOProtocol, _get_protocol
+
+
+class Root(NamedTuple):
+    """
+    Class with fixed values that represent a root in the roots.json file.
+
+
+    Attributes
+    ----------
+    key : str
+        A unique key that can be used to identify a specific entry
+
+    """
+    key: str = field(compare=False)
+    path: str = field(compare=True)
+    var: str = field(compare=False)
+    
+    def __repr__(self):
+        return self.path
+    
+    def exists(self) -> bool:
+        """ Return True if the path associated with this Root exists """
+        return os.path.exists(self.path)
 
 
 class File(str):
@@ -309,5 +333,3 @@ class IFile:
     def has_ext(self, ext: str) -> bool:
         """ Return True if this file ends with extension `ext` """
         ...
-
-    

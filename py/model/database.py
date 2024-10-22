@@ -41,21 +41,66 @@ controller.timeseries
 # TODO Extensively test all methods
 
 """
+import os.path
 import shutil
 import sqlite3
 import warnings
+from collections import namedtuple
 from collections.abc import Container, Collection
 from typing import Any
 
 from overrides import override
 
-import global_variables.data_classes
+from import_parent_folder import recursive_import
+import global_variables.data_classes as data_classes
 import sqlite.row_factories as factories
-import util.verify as verify
+# import util.verify as verify
 from file.file import IFile
 from model.table import Column, Table
 from util.data_structures import *
 from util.sql import *
+del recursive_import
+
+
+def sql_create_timeseries_item_table(item_id: int, check_exists: bool = True) -> str:
+    """ Returns an executable SQL statement for creating a timeseries table for a specific item """
+    return \
+        f"""CREATE TABLE {"IF NOT EXISTS " if check_exists else ""}"item{item_id:0>5}"(
+            "src" INTEGER NOT NULL CHECK (src BETWEEN 0 AND 4),
+            "timestamp" INTEGER NOT NULL,
+            "price" INTEGER NOT NULL DEFAULT 0 CHECK (price>=0),
+            "volume" INTEGER NOT NULL DEFAULT 0 CHECK (volume>=0),
+            PRIMARY KEY(src, timestamp) )"""
+
+
+def create_timeseries_db(db_file: str, item_ids: Iterable):
+    con = sqlite3.connect(db_file)
+    
+    for i in item_ids:
+        con.execute(sql_create_timeseries_item_table(item_id=i))
+    con.commit()
+    con.close()
+
+
+class ROConn(IFile):
+    """ Class of which the instances contain a read-only connection with the associated sqlite database """
+    def __init__(self, path: str, allow_wcon: bool = False):
+        super().__init__(path)
+        if not os.path.exists(path):
+            raise FileNotFoundError(f"Unable to establish a connection with a non-existent file at path={path}")
+        try:
+            self.con = sqlite3.connect(database=f"file:{path}?mode=ro", uri=True)
+        except sqlite3.OperationalError as e:
+            if allow_wcon and 'invalid uri authority' in str(e):
+                self.con = sqlite3.connect(path)
+            else:
+                raise e
+    
+    def __str__(self):
+        return self.path
+    
+    def __repr__(self):
+        return self.path
 
 
 class Database(sqlite3.Connection, IFile):
@@ -90,14 +135,16 @@ class Database(sqlite3.Connection, IFile):
             self.add_cursor(key)
         
         # Automatically extract tables and columns from the connected database
-        self.sql_tables, self.sql_indices = get_db_contents(c=self.cursor())
-        self.sqlite_master = self.execute("SELECT * FROM sqlite_master", factory=var.SqliteSchema).fetchall()
-        for el in self.sqlite_master:
-            # print(el)
-            ...
-        if parse_tables or parse_tables is None:
+        self.sql_tables: List[var.SqliteSchema] = self.execute(
+            "SELECT type, name, tbl_name, rootpage FROM sqlite_master WHERE type='table'",
+            factory=var.SqliteSchema).fetchall()
+        self.sql_indices: List[var.SqliteSchema] = self.execute(
+            "SELECT type, name, tbl_name, rootpage FROM sqlite_master WHERE type='index'",
+            factory=var.SqliteSchema).fetchall()
+        
+        if parse_tables is None or parse_tables:
             # print(self.db_path)
-            self.extract_tables(parse_full=isinstance(parse_tables, bool))
+            self.extract_tables(parse_full=True)
         
         if isinstance(tables, Table):
             self.tables[tables.name] = tables
@@ -151,6 +198,13 @@ class Database(sqlite3.Connection, IFile):
                     return c.execute(*args, **kwargs)
             else:
                 return super().execute(*args, **kwargs)
+        except sqlite3.OperationalError as e:
+            if 'no such table: item' in str(e) and isinstance(args[1], dict) and kwargs.get('recursive') is None:
+                create_timeseries_db(self.path, [args[1].get('item_id') if isinstance(args[1], dict) else args[1]])
+                kwargs['recursive'] = True
+                return self.execute(*args, **kwargs)
+            raise e
+            
         # except WindowsError as e:
         except sqlite3.Error as e:
             if len(args) == 0:
@@ -280,11 +334,9 @@ class Database(sqlite3.Connection, IFile):
         parse_full = parse_full and table_filter is None
         
         # Used to be able to auto-parse databases with a large amount of tables that are more or less the same
-        parse_one = not parse_full and len(self.sqlite_master) > 10 and table_filter is None
+        parse_one = not parse_full and len(self.tables) > 10 and table_filter is None
         
-        for _table in self.sqlite_master:
-            if _table.type != 'table':
-                continue
+        for _table in self.tables:
             columns = []
             
             if not parse_full and table_filter is not None and _table.name not in table_filter:
@@ -329,7 +381,7 @@ class Database(sqlite3.Connection, IFile):
             print(sql)
         failed = []
         for row in rows:
-            row = {col: row.get(col) for col in global_variables.data_classes.Item.__match_args__}
+            row = {col: row.get(col) for col in data_classes.Item.__match_args__}
             try:
                 con.execute(sql, row)
                 if prt:
@@ -422,7 +474,8 @@ class Database(sqlite3.Connection, IFile):
     def count_rows(self, table: str, parameters: dict = None, **kwargs):
         """ Count the number of rows listed in `table` """
         if len(kwargs) == 0:
-            return self.cursors.get(0).execute(f"""SELECT COUNT(*) FROM {table}""").fetchone()
+            # print(table)
+            return self.cursors.get(0).execute(f"""SELECT COUNT(*) FROM '{table}' """).fetchone()
         else:
             suffix = ''
             for k in ['suffix', 'where', 'group_by']:
@@ -434,6 +487,33 @@ class Database(sqlite3.Connection, IFile):
                     suffix += f"{k.replace('_', ' ').upper()} {a.replace('GROUP BY', '').strip()} "
             return self.cursors.get(0).execute(f"""SELECT COUNT(*) FROM {table} {suffix}""",
                                                () if parameters is None else parameters).fetchall()
+        
+    def count_all_rows(self, csv_file: str = None) -> List[Dict[str, str or int]]:
+        """ Count rows within the database on a per-table basis and export the results to a csv file, if applicable. """
+        _count = namedtuple('_count', ['name', 'count'])
+        counts, tables = [], self.execute("PRAGMA TABLE_LIST").fetchall()
+        n, summed = len(tables), 0
+        for idx, t in enumerate(tables):
+            c = _count(t['name'], self.count_rows(t['name']))
+            summed += c.count
+            print(f"Current: {c} ({idx} / {n} | rows cumulative: {summed})", end='\r')
+            counts.append(c._asdict())
+        print(f"\n\n")
+        
+        if csv_file is not None:
+            import pandas as pd
+            df = pd.DataFrame(counts)
+            try:
+                df.to_csv(csv_file, index=False)
+            except PermissionError:
+                file_id, done = 0, False
+                while not done:
+                    file_id += 1
+                    try:
+                        df.to_csv(csv_file, index=False)
+                    except PermissionError:
+                        ...
+        return counts
     
     def vacuum(self, temp_file: str = None, verify_vacuumed_db: bool = True, remove_temp_file: bool = True):
         """
@@ -513,8 +593,13 @@ class Database(sqlite3.Connection, IFile):
     
     @override
     def fsize(self) -> int:
+        """ Returns the file size in bytes of the db file """
         return os.path.getsize(self.path)
+    
+    
+            
 
 
 if __name__ == '__main__':
-    ...
+    import global_variables.path as gp
+    Database(gp.f_db_timeseries).count_all_rows('data/row_counts_161024.csv')

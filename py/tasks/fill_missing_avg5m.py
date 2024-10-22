@@ -7,6 +7,10 @@ import sqlite3
 import time
 from collections.abc import Iterable
 
+
+
+from import_parent_folder import recursive_import
+recursive_import(1)
 import backend.download as dl
 import global_variables.osrs as go
 import global_variables.path as gp
@@ -17,6 +21,9 @@ import util.str_formats as fmt
 from file.file import File
 from model.data_source import SRC
 from model.database import Database
+del recursive_import
+
+
 
 shutdown = False
 db_size_start = None

@@ -5,9 +5,11 @@ Module with various implementations for preprocessing transferred data.
 import sqlite3
 from collections.abc import Iterable
 
+from import_parent_folder import recursive_import
 import global_variables.path as gp
 from model.data_source import SRC
-from model.database import Database
+from model.database import Database, sql_create_timeseries_item_table
+del recursive_import
 
 
 def add_item_data(item_ids: int or Iterable, add_table: bool = False):
@@ -21,7 +23,7 @@ def add_item_data(item_ids: int or Iterable, add_table: bool = False):
     for item_id in item_ids:
         if add_table:
             try:
-                con2.execute(f"""CREATE TABLE "item{item_id:0>5}"("src" INTEGER NOT NULL, "timestamp" INTEGER NOT NULL, "price" INTEGER NOT NULL DEFAULT 0 CHECK (price>=0), "volume" INTEGER NOT NULL DEFAULT 0 CHECK (volume>=0), PRIMARY KEY(src, timestamp) )""")
+                con2.execute(sql_create_timeseries_item_table(item_id, check_exists=False))
             except sqlite3.Error:
                 ...
         

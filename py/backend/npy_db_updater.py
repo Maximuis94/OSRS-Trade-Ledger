@@ -16,9 +16,11 @@ import numpy as np
 import pandas as pd
 from overrides import override
 
+from import_parent_folder import recursive_import
 import global_variables.configurations as cfg
 import global_variables.osrs as go
 import global_variables.path as gp
+import sqlite.row_factories
 import util.array as u_ar
 import util.file as uf
 import util.str_formats as fmt
@@ -29,11 +31,12 @@ from file.file import File
 from global_variables.data_classes import NpyDatapoint as NpyDp
 from model.data_source import DataSource, SRC
 from model.database import Database
+del recursive_import
 
 item = create_item(2)
 est_vol_per_char = 0
 ts = 0
-min_timestamp, max_timestamp = 0, 0
+min_timestamp, max_timestamp, timestamps = 0, 0, []
 t_print = 0
 
 cols, ar = [], np.ndarray([])
@@ -60,9 +63,10 @@ class NpyDbUpdater(Database):
                                 timestamp BETWEEN ? AND ?+299"""
     sql_fetch_npy: str = """SELECT * FROM ___"""
     sql_ts_start: str = """SELECT MAX(timestamp) FROM ___ """
+    vacuum_db: bool = False
     
     def __init__(self, db_path: File = gp.f_db_npy, source_db_path: str = gp.f_db_timeseries,
-                 item_ids: Sequence = go.npy_items, prices_listbox_path: File = gp.f_prices_listbox,
+                 item_ids: Sequence = go.npy_items, prices_listbox_path: File or None = gp.f_prices_listbox,
                  execute_update: bool = True, add_arrays: bool = True, **kwargs):
         """
         
@@ -74,7 +78,7 @@ class NpyDbUpdater(Database):
             Source database file
         item_ids : Sequence, optional global_variables.osrs.npy_items by default
             Sequence of item_ids that are included in the update
-        prices_listbox_path : File, optional, global_variables.path.f_prices_listbox by default
+        prices_listbox_path : File or None, optional, global_variables.path.f_prices_listbox by default
             Path where the prices listbox file should be saved at. If set to None, it will skip the prices listbox
             update.
         execute_update : bool, optional, True by default
@@ -87,11 +91,14 @@ class NpyDbUpdater(Database):
         new_db : bool, optional, None by default
             Flag that indicates whether a new database should be created. If True, this will instantly delete the
             existing database.
+        itemdb : sqlite3.Connection, optional, None by default
+            If passed, use this connection for itemdb interactions instead
         
         """
         super().__init__(path=db_path, parse_tables=False)
         self.item_ids = item_ids
         self.n = len(item_ids)
+        self.global_counter = False
         
         if kwargs.get('new_db') is not None and kwargs.get('new_db') and db_path.exists():
             self.new_db()
@@ -117,6 +124,8 @@ class NpyDbUpdater(Database):
         self.item_id, self._r = 0, ''
         
         self.src_db = Database(source_db_path, read_only=True)
+        self.itemdb: sqlite3.Connection or None = False #kwargs.get('itemdb')
+        
         self.ts_con_avg5m = self.src_db.cursor()
         self.ts_con_avg5m.row_factory = self.timeseries_rows_factory
         self.ts_con_rt = self.src_db.cursor()
@@ -141,7 +150,7 @@ class NpyDbUpdater(Database):
         
         self.placeholder = [[0, 0]]
         print(f'\tNpy items: {len(item_ids)} Npy timespan was set to [{ut.loc_unix_dt(self.t0)} - '
-              f'{ut.loc_unix_dt(self.t1)}]')
+              f'{ut.loc_unix_dt(self.t1)}] (local timezone)')
         if execute_update:
             # print(f'Created tables in {fmt.delta_t(time.perf_counter()-self.t_start)}')
             start_insert = time.perf_counter()
@@ -157,7 +166,8 @@ class NpyDbUpdater(Database):
                 self.update_listbox()
             
             tpc = time.perf_counter()
-            print(f'\n\tDone! Insert time: {fmt.delta_t(tpc-start_insert)} Total runtime: {fmt.delta_t(tpc-self.t_start)}')
+            print(f'\n\tDone! Insert time: {fmt.delta_t(tpc-start_insert)} '
+                  f'Total runtime: {fmt.delta_t(tpc-self.t_start)}', end='\n\n')
         self.con = None
     
     def configure_default_timestamps(self):
@@ -168,9 +178,11 @@ class NpyDbUpdater(Database):
                 self.set_table_name(f"""SELECT MAX(timestamp) FROM ___
                 WHERE src in {SRC.by_source('avg5m')}""", i),
                 factory=0).fetchone())
-        self.t0, self.t1 = int(t1 - t1 % 86400 - cfg.npy_db_timespan * 86400), int(t1 - t1 % 14400)
+        t1 = int(round(t1 / cfg.npy_round_t1, 0) * cfg.npy_round_t1)
+        self.t0 = t1 - t1 % cfg.npy_round_t0 - cfg.npy_db_timespan_days * 86400
+        self.t1 = t1 - t1 % cfg.npy_round_t1
         self.timestamps = range(self.t0, self.t1, 300)
-        global min_timestamp, max_timestamp
+        global min_timestamp, max_timestamp, _n_to_do
         min_timestamp, max_timestamp = self.t0, self.t1
     
     def updater_print(self, idx, n_items, n_rows, n_deleted, n_created, exe_times_item):
@@ -199,10 +211,6 @@ class NpyDbUpdater(Database):
             The lower bound timestamp
         t1 : int, optional, None by default
             The upper bound timestamp
-
-        Returns
-        -------
-        
         
         Notes
         -----
@@ -324,6 +332,7 @@ class NpyDbUpdater(Database):
         if self.item_id != item_id:
             # print(f'Setting item_id to {item_id}                ')
             # time.sleep(2)
+            # print(self.itemdb, self.itemdb is not None)
             item = create_item(item_id)
             self._r, self.item_id = ('___', f'"item{item_id:0>5}"'), item_id
             self.sql = {
@@ -616,7 +625,7 @@ class NpyDbUpdater(Database):
         -----
         The tags are encoded as b_X_Y, with b referring to buy price, X referring to the first hour of the interval and
         Y referring to the final hour of the interval (UTC times). In the GUI, they are converted to local time rather
-        than UTC time. E.g. b_4_8 refers to the buy price in the interval of 4am-8am.
+        than UTC time. E.g. b_4_8 refers to the buy price in the interval of 4am-8am (UTC).
         Sell prices are shown as the last interval for that row and the average across 3/6 highest sell prices across
         all intervals.
         """
@@ -627,7 +636,7 @@ class NpyDbUpdater(Database):
         
         # Fix for missing entries (would otherwise
         if interval_start % interval_size != 0:
-            interval_start = interval_start + 14400 - interval_start % 14400
+            interval_start = interval_start + cfg.listbox_column_timespan - interval_start % cfg.listbox_column_timespan
         
         buy_tags = {0: 'b_0_4', 4: 'b_4_8', 8: 'b_8_12', 12: 'b_12_16', 16: 'b_16_20', 20: 'b_20_24'}
         rows = []
@@ -662,7 +671,7 @@ class NpyDbUpdater(Database):
                 cur['s_24h_high'] = s_h
                 cur['volume'] = int(self.execute(f"SELECT AVG(wiki_volume) FROM item{item_id:0>5} WHERE timestamp "
                                                  f"BETWEEN ? AND ? ORDER BY timestamp ",
-                                                 (interval_start-86400,interval_start), factory=0).fetchone())
+                                                 (interval_start-86400, interval_start), factory=0).fetchone())
                 cur['delta_s_b'] = s_h - min_buy
             
             except ValueError:
@@ -695,7 +704,92 @@ class NpyDbUpdater(Database):
             exit(1)
 
 
+def clear_recent_rows(ts_threshold, item_ids, t0=time.perf_counter()):
+    """
+    Clear all rows from the npy database with a timestamp greater than or equal to `ts_threshold` for all items in
+    `item_ids`.
+    
+    Parameters
+    ----------
+    ts_threshold : int
+        Lower bound timestamp that indicates which rows will be deleted
+    item_ids : List[int] or Tuple[int]
+        An iterable of item_ids that will have (a subset of) their most recent rows deleted
+    t0 : int or float, optional, time.perf_counter() by default
+        Execution start that will be used to tag printed strings with.
+
+    Returns
+    -------
+
+    """
+    db = Database(gp.f_db_npy, read_only=False)
+    
+    n_deleted = (db.execute("SELECT MAX(timestamp) FROM item00002").fetchone()[0]-ts_threshold)//300 * len(item_ids)
+    
+    response = input(f"\tExecuting this method will result in deletion of approximately {n_deleted} rows across "
+                     f"{len(item_ids)} different tables. Press Y to proceed: ")
+    if response != "Y":
+        print(f"Response = '{response}' -- aborting execution in 5 seconds...")
+        time.sleep(5)
+        exit(-1)
+    print(f"\tResponse = '{response}' -- Proceeding...")
+    
+    values = (ts_threshold,)
+    print(f"\t[{fmt.delta_t(time.perf_counter() - t0)}] Deleting rows for {len(item_ids)} items with timestamp >= "
+          f"{fmt.unix_(ts_threshold)}")
+    for i in item_ids:
+        db.execute(f"""DELETE FROM 'item{i:0>5}' WHERE timestamp >= ?""", values)
+    db.commit()
+    
+    print(f"\t[{fmt.delta_t(time.perf_counter() - t0)}] Deleted rows! Vacuuming db...")
+    db.execute("VACUUM")
+    db.close()
+    print(f"\t[{fmt.delta_t(time.perf_counter()-t0)}] Db vacuumed! Recomputing deleted rows...")
+    return
+
+
+def recompute_recent_rows(ts_threshold: int, item_ids: List[int] = go.npy_items):
+    """
+    Delete rows that are newer than `ts_threshold` for all items in `item_ids`, then re-compute each row.
+    
+    Parameters
+    ----------
+    ts_threshold : int
+        Timestamp threshold; all rows with a timestamp equal to or greater than `ts_threshold` will be deleted for
+        the listed items and then recomputed
+    item_ids : List[int], optional, global_variables.osrs.npy_items by default
+        The list of items that will be affected by executing this method
+
+    Returns
+    -------
+    
+    
+    Notes
+    -----
+    Although restoring the database may be time-consuming, executing this method will *NOT* result in irrecoverable loss
+    of data. Provided the timeseries database is intact, ofcourse.
+
+    """
+    print(f"[{fmt.unix_(time.time())}] Executing npy_db_updater.recompute_recent_rows()")
+    
+    
+    
+    t0 = int(time.perf_counter())
+    clear_recent_rows(ts_threshold, item_ids, t0)
+    
+    NpyDbUpdater()
+    return input(f"[{fmt.delta_t(time.perf_counter()-t0)}] Done! Press ENTER to close this screen...")
+
+
 if __name__ == '__main__':
-    # NpyDbUpdater()
+    # NpyDbUpdater(execute_update=True, add_arrays=False)
+    
+    s = recompute_recent_rows(ts_threshold=1727870400)
+    # print(ut.utc_unix_dt(1726012500))
+    
+    exit(1)
+    
+    
+    
     
     ...

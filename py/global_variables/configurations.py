@@ -6,7 +6,9 @@ Values listed in this module are to be used as default parameter values in metho
 """
 from collections import namedtuple
 
+from import_parent_folder import recursive_import
 import global_variables.path as gp
+del recursive_import
 
 # If True
 debug = True
@@ -24,10 +26,18 @@ npy_list_update_frequency = 86400 * 7
 
 # Coverage of npy database in days
 # t0 of NpyArray is equal to unix_time - npy_array_timespan_days*86400, rounded down to 12 am utc
-npy_db_timespan = 120
+# npy_db_timespan_days = 120
+npy_db_timespan_days = 456
+
+# Timestamp cut-off values for npy db
+npy_round_t0 = 86400
+npy_round_t1 = 3600
 
 # Amount of days coverage the prices listbox should have
 prices_listbox_days = 56
+
+# Timespan of each listbox column in seconds
+listbox_column_timespan = 14400
 
 # If the number of localdb backups exceeds this amount, remove the oldest backup. Db is relatively small
 max_localdb_backups = 10

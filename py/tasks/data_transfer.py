@@ -10,350 +10,316 @@ Updating the database consists of the following steps;
 
 These steps are implemented below. They are typically combined and executed via an executable script.
 """
+import datetime
 import os
+import shutil
 import sqlite3
 import time
-from typing import List
+from os.path import exists
+from traceback import format_list
+from typing import List, Tuple
 
 import pandas as pd
 
+from import_parent_folder import recursive_import
 import global_variables.configurations as cfg
-import global_variables.path as gp
 import global_variables.osrs as go
-import global_variables.variables as var
-import sqlite.executable_statements
+import global_variables.path as gp
+import sqlite.executable
 import sqlite.row_factories
 import util.file as uf
 import util.str_formats as fmt
-from controller.item import ItemController, Item
-from file.file import File
-from global_variables.data_classes import TimeseriesRow, rbpi_dbs, Row
-from model.database import Database
-from util.data_structures import datapoint
+from controller.item import Item, augment_itemdb_entry
+from model.database import sql_create_timeseries_item_table, ROConn
+from model.timeseries import sql_timeseries_insert
+from sqlite.row_factories import factory_idx0, factory_dict
+from util.str_formats import delta_t
 
-# This is the order in which src id values are assigned when creating primary keys.
-src_ids = '', 'a', 'w', 'r'
-
+del recursive_import
 
 _t_commit = int(time.perf_counter() + cfg.data_transfer_commit_frequency)
 _t_print = int(time.perf_counter() + cfg.data_transfer_print_frequency)
+_dtn = datetime.datetime.now()
 n_start = None
 ts_threshold = int(gp.f_db_timeseries.ctime())
 
-
-def commit(_db: sqlite3.Connection, msg: str = None, force: bool = False, close_db: bool = False,
-           suffix: str = '                                       '):
-    """ Print `msg` if applicable and commit `_db` if applicable (don't print/commit too frequently), or if `force`"""
-    global _t_commit, _t_print
-    
-    if time.perf_counter() > min(_t_commit, _t_print) or force:
-        cur_time = int(time.perf_counter())
-        
-        if cur_time > _t_commit or force:
-            _db.commit()
-            _t_commit = cur_time + cfg.data_transfer_commit_frequency
-            if close_db:
-                _db.close()
-        
-        if cur_time > _t_print or force:
-            if msg is not None:
-                if force:
-                    print('')
-                print(msg + suffix, end='\n' if force else '\r')
-            _t_print = cur_time + cfg.data_transfer_print_frequency
+small_batch_log = {}
+if gp.f_small_batch_log.exists():
+    small_batch_log = gp.f_small_batch_log.load()
 
 
-def convert_row(src: int, row: dict):
-    """ Convert a dict row to a tuple that can be inserted into the database """
-    output = [row.get('timestamp')]
-    if src <= 2:
-        # print(row)
-        prefix = 'buy_' if src == 1 else 'sell_' if src == 2 else ''
-        output.append(row.get(f'{prefix}price'))
-        output.append(row.get(f'{prefix}volume'))
-        return tuple(output)
-    
-    else:
-        b = row.get('is_buy')
-        if b == 1 and src == 3 or b == 0 and src == 4:
-            output.append(row.get(f'price'))
-            output.append(0)
-            return tuple(output)
-    raise ValueError
+def is_invalid_export(b: str) -> bool:
+    # print(int(_dtn.strftime('%y%m%d%H%M%S')), b[:12])
+    return not (os.path.splitext(b)[-1] == '.db' and b[:12].isdigit() and int(b[:12]) <= int(_dtn.strftime('%y%m%d%H%M%S')))
 
 
-def parse_batch(batch_path: str or File, out_file: str = None, dir_out: str = None) -> List[TimeseriesRow]:
+def is_invalid_batch(b: str) -> bool:
+    return not (os.path.splitext(b)[-1] == '.db' and b[:6] == 'batch_' and b[6:8].isdigit())
+
+
+# @deprecated
+def transfer_rbpi_db_files(dir_from: str = gp.dir_rbpi_dat, dir_to: str = gp.dir_temp, max_log_size: int = 48) \
+        -> Tuple[List[str], List[str]]:
     """
-    Parse a batch file and convert it into a list of TimeseriesRows. The input batch file is assumed to be a list of
-    (datatype dicts, rows) tuples or two lists of datatype dicts and rows.
-    Depending on the given parameters, it is also possible to export the converted rows to the path specified.
+    [OBSOLETE] Old version for transferring db files. Use transfer_rbpi_db_exports() instead.
+    
+    Copy the db batches from the raspberry pi to the disk. Returns a list of copied files and deletable copies
+    """
+    global small_batch_log
+    small_batch_log = gp.f_small_batch_log.load() if gp.f_small_batch_log.exists() else []
+    copied_files, to_remove = [], []
+    for b in gp.get_files(src=dir_from):
+        if is_invalid_batch(b):
+            continue
+        from_file = dir_from + b
+        try:
+            is_large_batch = b[6:9].isdigit()
+            
+            if not is_large_batch:
+                log_entry = (int(b[6:8]), int(os.path.getmtime(from_file)), int(os.path.getsize(from_file)/1000))
+                if log_entry in small_batch_log:
+                    continue
+            else:
+                log_entry = None
+            # to_file =
+            to_file = dir_to + (f"{int(os.path.getmtime(dir_from+b))}.db" if is_large_batch else b)
+            if os.path.exists(to_file) and is_large_batch:
+                to_file = to_file[:-3]+'_.db'
+            print('Copying', os.path.split(from_file)[-1], os.path.split(to_file)[-1], end='\r')
+            shutil.copy2(from_file, to_file)
+            copied_files.append(ROConn(to_file))
+            if is_large_batch:
+                to_remove.append(from_file)
+                # print('Removing', from_file)
+            else:
+                to_remove.append(to_file)
+                if log_entry is not None:
+                    small_batch_log.append(log_entry)
+        except IndexError:
+            ...
+    return copied_files, to_remove
+
+
+def transfer_rbpi_db_exports(dir_from: str = gp.dir_rbpi_exports, dir_to: str = gp.dir_temp) \
+        -> Tuple[List[ROConn], List[str], List[int]]:
+    """
+    Iterate over db files in `dir_from` that are deemed to be valid exports, given the path. Copy the files to `dir_to`
+    and save a read-only connection with each db file. While establishing connections, also compile a list of unique
+    item_ids found within the connected database.
+    Return as a list of read-only connections, a list of source files that could be removed and a list of unique
+    item_ids found across all connections.
     
     Parameters
     ----------
-    batch_path : str
-        path to the batch file
-    out_file : str, optional, None by default
-        If passed, export the rows to this path
-    dir_out : str, optional, None by default
-        If passed, export the parsed list of rows to a file in `dir_out`. If no `out_file` was passed, generate one
-        formatted like 1717675200_1717689600.npy
-
+    dir_from : str, optional, global_variables.path.dir_rbpi_exports by default
+        Source dir that is to be parsed for db files
+    dir_to : str, optional, global_variables.path.dir_temp by default
+        Destination dir in which the db files are copied to
+    
     Returns
     -------
-    List[TimeseriesRow]
-
+    List[ROConn]
+        Read-only connections, one for every successfully copied file
+    
+    List[str]
+        Source files that have been successfully copied from `dir_from`
+    
+    List[int]
+        List of unique item_ids, taken across all db files
     """
-    if isinstance(batch_path, str):
-        batch_path = File(batch_path)
-    print(f"\tConverting batch {batch_path.file}          ", end='\r')
-    batch, parsed = batch_path.load(), []
-    min_ts, max_ts, track_ts = int(time.time()), 0, dir_out is not None and out_file is None
-    n = 0
-    try:
-        for dt, rows in batch:
-            for row in pd.DataFrame(rows, columns=list(dt.keys())).astype(dt).to_dict('records'):
-                dp = datapoint(row)
-                n += len(dp)
-                parsed += dp
-                if track_ts and row.get('buy_price') is not None and row.get('item_id') == 2:
-                    ts = row.get('timestamp')
-                    min_ts, max_ts = min(min_ts, ts), max(max_ts, ts)
-    except ValueError:
-        if isinstance(batch[0], Row):
-            parsed = batch
-            for el in batch:
-                if el.item_id in go.most_traded_items:
-                    ts = el.timestamp
-                    min_ts, max_ts = min(min_ts, ts), max(max_ts, ts)
-        else:
-            for dt, rows in zip(batch[0], batch[1]):
-                
-                for row in pd.DataFrame(rows, columns=list(dt.keys())).astype(dt).to_dict('records'):
-                    
-                    try:
-                        dp = datapoint(row)
-                        parsed += dp
-                        n += len(dp)
-                        if dir_out and row.get('buy_price') is not None and row.get('item_id') == 2:
-                            ts = row.get('timestamp')
-                            min_ts, max_ts = min(min_ts, ts), max(max_ts, ts)
-                    except ValueError:
-                        if row.get('is_sale') is not None:
-                            row['is_buy'] = 1-int(row['is_sale'])
-                            parsed += datapoint(row)
-                            n += 1
-    
-    if track_ts:
-        min_ts, max_ts = round(min_ts/14400, 0)*14400, round(max_ts/14400, 0)*14400
-        out_file = File(dir_out + f'{min_ts:.0f}_{max_ts:.0f}' + batch_path.extension)
-    elif dir_out is not None:
-        out_file = File(dir_out + out_file)
-    if out_file is not None:
-        if not isinstance(out_file, File):
-            out_file = File(out_file)
-        if out_file.exists() and len(out_file.load()) != len(parsed):
-            raise FileExistsError
-        out_file.save([row.tuple() for row in parsed])
-        if len(out_file.load()) != len(parsed):
-            raise RuntimeError(f"Something went wrong copying the file...")
-        ...
-    return parsed
-
-
-def insert_batch(db: Database, batch_path: str, skip_ids: list = (9044, 9050, 26247, 2660), remove_src: bool = False):
-    """ Insert the batch located at `batch_path` into Database `db` """
-    n_per_src = [0, 0, 0, 0, 0]
-    
-    for row in parse_batch(batch_path):
-        if row.item_id in skip_ids:
+    global small_batch_log
+    sql_items = "SELECT DISTINCT item_id FROM timeseries"
+    small_batch_log = gp.f_small_batch_log.load() if gp.f_small_batch_log.exists() else []
+    connections, to_remove, item_ids = [], [], None
+    for b in gp.get_files(src=dir_from):
+        if is_invalid_export(b):
             continue
+        from_file = dir_from + b
         try:
-            db.execute(
-                f"INSERT OR REPLACE INTO 'item{row.item_id:0>5}'(src, timestamp, price, volume) VALUES (?, ?, ?, ?)",
-                row.tuple()[1:])
-        except sqlite3.Error as e:
-            print(e)
-            if 'no such table' in str(e):
-                print('Encountered a new item_id; generating table and reformatting batch')
-                db.rollback()
-                print(f'Creating table item{row.item_id:0>5}')
-                db.execute(
-                    f"""CREATE TABLE "item{row.item_id:0>5}"("src" INTEGER NOT NULL CHECK (src BETWEEN 0 AND 4), "timestamp" INTEGER NOT NULL, "price" INTEGER NOT NULL DEFAULT 0 CHECK (price>=0), "volume" INTEGER NOT NULL DEFAULT 0 CHECK (volume>=0), PRIMARY KEY(src, timestamp) )""")
-                db.commit()
-                return insert_batch(db=db, batch_path=batch_path, skip_ids=skip_ids, remove_src=remove_src)
-        n_per_src[row.src] += 1
-    db.commit()
-    
-    n, repl = sum(n_per_src), [('realtime', 'rt'), ('sell', 's'), ('buy', 'b')]
-    s = '\tRows/src ['
-    for src, _n in zip(var.timeseries_srcs_abr, n_per_src):
-        for el in repl:
-            src.replace(*el)
-        s += f'{src}: {_n}, '
-    print(s+f'Total: {n}]')
-    if remove_src:
-        batch_path = File(batch_path)
-        batch_path.delete()
-        print(f'\t * Deleted source batch file {batch_path.file}')
-    
-    return n
-    
-
-def copy_batches(src_folder: str = gp.dir_rbpi_dat, transfer_folder: str = gp.dir_batch):
-    """ Copy the batches from the rbpi to the local drive, while converting the contents and naming it appropriately """
-    transferred_batches = []
-    print(f'\tCopying batch files;\n\tFrom SRC={src_folder}\n\tTo DST={transfer_folder}...')
-
-    # First get a list of files to copy...
-    for batch_path in uf.get_files(src=gp.dir_rbpi_dat, ext='npy'):
-        parse_batch(batch_path, dir_out=transfer_folder)
-        transferred_batches.append(batch_path)
-    return transferred_batches
-    
-
-def batch_transfer(db_to: Database, min_ts: int = None):
-    """ Parse batches in rbpi data folder, transfer contents and delete them """
-    batch_start = time.perf_counter()
-    rows, ts_min, ts_max = [0, 0, 0], None, None
-    transferred_batches = copy_batches()
-    
-    if min_ts is not None:
-        min_ts = min_ts - min_ts % cfg.rbpi_batch_timespan
-        transferred_batches = [gp.dir_batch+f for f in uf.get_files(gp.dir_batch, ext='npy', full_path=False)
-                               if int(f.split('_')[0]) >= min_ts]
-    
-    n_rows = {}
-    print(f'\tInserting batches...')
-    for batch_path in transferred_batches:
-        batch_path = File(batch_path)
-        print(f" * Current file: DST/{batch_path.split('/')[-1]} (size={batch_path.fsize()/pow(10,6):.1f}mb)")
-        idx, t_ = 0, time.perf_counter()
-        n_rows[batch_path] = insert_batch(db=db_to, batch_path=batch_path.path, remove_src=True)
-        print(f'\tInserted {n_rows.get(batch_path)} rows from batch {batch_path.file} '
-              f'in {fmt.delta_t(time.perf_counter()-t_)}')
-        
-    n, srcs, repl = '', list(n_rows.keys()), [('realtime', 'rt'), ('sell', 's'), ('buy', 'b')]
-    for src, n_ in n_rows.items():
-        for el in repl:
-            src = src.replace(*el)
-        n += f"\n\t\t{src.split('/')[-1]}: {n_}"
-    print(f'\tTransferred rows {n}'
-          f'\n\t\tTime taken: {fmt.delta_t(time.perf_counter()-batch_start)}')
-    
-    n = ''
-    n_inserted = 0
-    for src, n_ in zip(list(n_rows.keys()), rows):
-        n += f"{src.file}: {n_}, "
-    for _, n in n_rows.items():
-        n_inserted += n
-    print(f'\tTotal rows transferred from batches: [{n_inserted}]')
-    ts_max = db_to.get_max(table='item00002', column='timestamp')
-    return ts_max
+            to_file = dir_to + b
+            if os.path.exists(to_file):
+                to_file = to_file[:-3]+'_.db'
+            print('Copying', os.path.split(from_file)[-1], os.path.split(to_file)[-1], end='\r')
+            shutil.copy2(from_file, to_file)
+            rc = ROConn(to_file)
+            c = rc.con.cursor()
+            c.row_factory = lambda cursor, row: row[0]
+            if item_ids is None:
+                item_ids = c.execute(sql_items).fetchall()
+            else:
+                item_ids += list(frozenset(item_ids).difference(c.execute(sql_items).fetchall()))
+            connections.append(rc)
+            to_remove.append(from_file)
+        except IndexError:
+            ...
+    # print(len(item_ids), item_ids)
+    return connections, to_remove, item_ids if item_ids is not None else go.item_ids
 
 
-def get_insert(item_id: int, src: int):
-    """ Return an INSERT OR REPLACE statement for table item`item_id`  """
-    return f"""INSERT OR REPLACE INTO "item{item_id:0>5}"(src, timestamp, price, volume) VALUES ({src}, ?, ?, ?)"""
-
-
-def parse_tables(db_to: sqlite3.Connection, db_dict: dict = rbpi_dbs, t0: int = None):
-    """ Parse avg5m, realtime and wiki data from rbpi sqlite tables and transfer it. """
-    t_ = time.perf_counter()
-    t1 = int(time.time() - time.time() % 3600)
-    _types = {col: var.types.get(col) for col in ['item_id']+list(var.avg5m_columns)+list(var.realtime_columns)+list(var.wiki_columns)}
-    # print(_types)
-    global ts_threshold
-    if t0 is not None:
-        ts_threshold = t0-1
-        
-    def rbpi_table_row_factory(c: sqlite3.Cursor, _row) -> dict:
-        """ Parse rows from rbpi sqlite tables """
-        r = {}
-        for i, col in enumerate(c.description):
-            if i == 0:
-                continue
-            col = col[0]
-            try:
-                r[col] = _types.get(col).py(_row[i])
-            except AttributeError:
-                if _row[i] in (0, 1):
-                    r['is_buy'] = bool(abs(_row[i] - 1))
-                else:
-                    print(i, r, str([_col[0] for _col in c.description]))
-                    print(_row)
-                    raise AttributeError
-        return r
-
-    n = {}
-    inserted_rows = [0, 0, 0, 0, 0]
-
-    for src in ['avg5m', 'realtime', 'wiki']:
-        if db_dict.get(src) is None:
-            raise ValueError(f'db_dict {db_dict} does not have an entry for {src}')
-        
-        path, table = db_dict.get(src)
-        con = Database(path, parse_tables=False, read_only=False)
-        con.row_factory = rbpi_table_row_factory
-        # _t0 = con.get_max(table=src, column='timestamp', suffix=f"WHERE timestamp > {ts_threshold}")-1
-        rows = con.execute(f"SELECT * FROM {table} WHERE timestamp > ? AND timestamp < ?", (t0, t1)).fetchall()
-        con.close()
-        
-        if len(rows) > 0:
-            _row = rows[0]
-            sql = sqlite.executable_statements.insert_sql_dict(row=rows[0], table=src, replace=True)
-            # sql_new = """INSERT OR REPLACE INTO """
-            n[src] = len(rows)
-            for row in rows:
-                try:
-                    if row.get('buy_price') is None:
-                        src = 4 - int(row.get('is_buy')) if row.get('volume') is None else 0
-                        try:
-                            db_to.execute(get_insert(item_id=row.get('item_id'), src=src), convert_row(src=src, row=row))
-                            # if src > 0:
-                            #     print(src, row, convert_row(src=src, row=row))
-                            inserted_rows[src] += 1
-                        except ValueError:
-                            ...
-                    else:
-                        for src in (1, 2):
-                            try:
-                                db_to.execute(get_insert(item_id=row.get('item_id'), src=src), convert_row(src=src, row=row))
-                                inserted_rows[src] += 1
-                            except ValueError:
-                                ...
-                except sqlite3.Error as e:
-                # except WindowsError:
-                    print(f' Sqlite3 error occurred while executing {sql}\n\tParameters: {row}\n\t{e}')
-            db_to.commit()
-        row_str = ""
-        for table, n_insert in zip(var.timeseries_srcs, inserted_rows):
-            row_str += f'{table}: {n_insert} | '
-    print(f'\tTransferred [{row_str[:-2]}] rows to table {src}')
-    print(f'\tParsed all sqlite databases in {1000*(time.perf_counter()-t_):.0f}ms\n')
-
-
-def timeseries_transfer(path: str = gp.f_db_timeseries):
+def timeseries_transfer_merged(path: str = gp.f_db_timeseries):
     """ Transfer exported rbpi batches, then extracted rows from rbpi sqlite dbs """
+    t0 = time.perf_counter()
+    global small_batch_log
     timeseries_exe_start, size_ = time.perf_counter(), os.path.getsize(path)
-    if 260 < time.time() % 14400 < 480:
+    if 60 < time.time() % 86400 < 240:
         print(' *** A batch is about to be added, rerun the script in 5 minutes ***')
         _ = input('Press ENTER to close')
         exit(1)
-    print(f' [{fmt.dt_(fmt_str="%d-%m %H:%M:%S")}] Importing data from the Raspberry Pi...')
-    timeseries_database = Database(path, read_only=False)
-    print(f' Transferring batches...')
-    t_ = time.perf_counter()
-    min_table_ts = batch_transfer(db_to=timeseries_database)#, min_ts=int(time.time()-14400*4))
-    print(f'\tTransferred batches in {fmt.delta_t(time.perf_counter()-t_)}\n')
+    if 90 < time.time() % 3600 < 180:
+        max_time = int(time.time()-time.time()%3600+180)
+        while time.time() < max_time:
+            time.sleep(1.0)
+            print(f'Sleeping for {max_time-time.time():.1f}s...', end='\r')
+    # copied_files, to_remove = transfer_rbpi_db_files()
+    copied_files, to_remove, item_ids = transfer_rbpi_db_exports()
+    copied_files.append(None)
+    # copied_files += _copied_files
+    # to_remove
     
-    print(f' Transferring Raspberry Pi Sqlite rows...')
-    t_ = time.perf_counter()
-    parse_tables(db_to=timeseries_database, db_dict=rbpi_dbs, t0=min_table_ts)
-    print(f'\tParsed all rbpi sqlite databases in {1000 * (time.perf_counter() - t_):.0f}ms\n')
-    timeseries_database.commit()
-    timeseries_database.close()
-    print(f' Transferred timeseries data in {fmt.delta_t(time.perf_counter()-timeseries_exe_start)} | '
-          f'File size increased by {(os.path.getsize(path)-size_)/1000000:.1f}mb\n\n')
+    con_to = sqlite3.connect(path)
+    success, skipped = [0, 0, 0, 0, 0], [0, 0, 0, 0, 0]
+    item_ids.sort()
+    transfer_start = time.perf_counter()
+    
+    def print_current_file(cur: ROConn):
+        print(f'\t[{delta_t(time.perf_counter() - transfer_start)}] Current file: {cur.file}' + ' ' * 10, end='\r')
+        
+    for idx, b in enumerate(copied_files):
+        b_success, b_skipped = [0, 0, 0, 0, 0], [0, 0, 0, 0, 0]
+        if b is None:
+            b = ROConn(gp.dir_rbpi_dat + 'timeseries.db', allow_wcon=True)
+        print_current_file(b)
+        # for r in con_from.execute(f"""SELECT item_id, src, timestamp, price, volume FROM 'timeseries'
+        #                        WHERE item_id NOT IN {go.timeseries_skip_ids} AND timestamp < ?""", max_ts).fetchall():
+        for r in b.con.execute(f"""SELECT item_id, src, timestamp, price, volume FROM 'timeseries'
+                                WHERE item_id NOT IN {go.timeseries_skip_ids}""").fetchall():
+            src = r[1]
+            sql_insert = sql_timeseries_insert(item_id=r[0], replace=False)
+            try:
+                con_to.execute(sql_insert, r[1:])
+                b_success[src] += 1
+                success[src] += 1
+            except sqlite3.IntegrityError:
+                b_skipped[src] += 1
+                skipped[src] += 1
+            except sqlite3.OperationalError as e:
+                if 'no such table: item' in str(e):
+                    con_to.execute(sql_create_timeseries_item_table(item_id=r[0], check_exists=False))
+                    print(f"\t * Created table 'item{r[0]:0>5}'")
+                    print_current_file(b)
+                    con_to.execute(sql_insert, r[1:])
+                else:
+                    raise e
+        con_to.commit()
+        print(f'\t[{idx+1}] {b.file}: ins={b_success} / skip={b_skipped} | '
+              f'Total: insert={sum(b_success)} skip={sum(b_skipped)} sum={sum(b_skipped)+sum(b_success)}')
+        b.con.close()
+        
+        if b.file[-13:] != 'timeseries.db':
+            os.remove(to_remove[idx])
+            print(f"\t\tDeleted src file {to_remove[idx]}")
+        # print(f"""os.remove({to_remove[idx]})""")
+    
+    # Remove copied small batches from PC (they will be merged later) and large batches from the rbpi
+    # print(f'\tRemoving {len(to_remove)} obsolete batch file{"s" if len(to_remove) > 1 else ""}...')
+    # for b in to_remove:
+    #     # os.remove(b)
+    #     print(f"""os.remove({b})""")
+    
+    # gp.f_small_batch_log.save(small_batch_log)
+
+    print('\t************************************************************************************\n'
+          f'\tTotal insertions: {success} | Total skips: {skipped}\n'
+          f'\tDB size: +{fmt.fsize(os.path.getsize(path)-size_)} | '
+          f'Runtime: {fmt.delta_t(time.perf_counter()-t0)}\n')
+
+
+def copy_batches():
+    for b in [f for f in gp.get_files(src=gp.dir_rbpi_dat) if os.path.splitext(f)[-1] == '.db' and f[:6] == 'batch_']:
+        try:
+            if not b[6:8].isdigit():
+                continue
+            shutil.copy2(gp.dir_rbpi_dat+b, gp.dir_temp+b)
+            
+            if b[6:9].isdigit():
+                os.remove(gp.dir_rbpi_dat+b)
+        except IndexError:
+            ...
+
+
+data_types = {'src': 'UInt8', 'item_id': 'UInt16', 'timestamp': 'UInt32', 'price': 'UInt32', 'volume': 'UInt32'}
+
+
+def db_to_df(db_path: str, out_dir: str) -> bool:
+    """ Convert an sqlite timeseries db into a pandas dataframe, set memory-efficient datatypes and pickle it """
+    con = sqlite3.connect(db_path)
+    t0 = time.perf_counter()
+    n_rows = con.execute("""SELECT COUNT(*) FROM 'timeseries'""").fetchone()[0]
+
+    def _row_factory(sqlite_cursor: sqlite3.Cursor, row) -> dict:
+        """ Method that can be set as row_factory of a sqlite3.Connection so it will return dicts """
+        if row[0] > 2:
+            row = (*row[:4], None)
+        return {col[0]: row[idx] for idx, col in enumerate(sqlite_cursor.description)}
+        
+    out_file = out_dir+os.path.split(db_path)[-1][:-3].replace('_', '') + '.dat'
+    con.row_factory = _row_factory
+    
+    if os.path.exists(out_file):
+        df = pd.concat([uf.load(out_file),
+                        pd.DataFrame(con.execute("SELECT src, item_id, timestamp, price, volume FROM 'timeseries'").fetchall(),
+                        columns=list(data_types.keys())).astype(data_types)])
+        df.drop_duplicates().to_pickle(out_file)
+        return True
+    else:
+        pd.DataFrame(con.execute("SELECT src, item_id, timestamp, price, volume FROM 'timeseries'").fetchall(),
+                     columns=list(data_types.keys())).astype(data_types).to_pickle(out_file)
+        return True
+    
+
+def timeseries_transfer_new():
+    """  """
+    batches = [f for f in gp.get_files(src=gp.dir_temp) if os.path.splitext(f)[-1] == '.db' and f[:6] == 'batch_']
+    failed_insertions = 0
+    success = 0
+    to_remove = []
+    for large_batch in (True,):# False):
+        for b in batches:
+            if not b[6:9].isdigit() or not os.path.exists(gp.dir_temp+b):
+                print(f'Skipping {b}')
+                continue
+            n_e, n, n_i = 0, 0, 0
+            
+            try:
+                db = sqlite3.connect(gp.f_db_timeseries)
+                con = sqlite3.connect(gp.dir_temp+b)
+                for row in con.execute('SELECT item_id, src, timestamp, price, volume FROM timeseries').fetchall():
+                    if row[0] in go.timeseries_skip_ids:
+                        continue
+                    try:
+                        db.execute(f"""INSERT INTO "item{row[0]:0>5}" (src, timestamp, price, volume) VALUES
+                                (?, ?, ?, ?)""", row[1:])
+                        success += 1
+                    except sqlite3.IntegrityError:
+                        n_i += 1
+                    except sqlite3.Error as e:
+                        n_e += 1
+                        failed_insertions += 1
+                        print(n_e, b, e)
+                db.commit()
+                db.close()
+                if large_batch and b[6:9].isdigit():
+                    batches.remove(b)
+                    if n_e == 0:
+                        print(f'Removing batch {b} ({n} rows extracted / {n_e} failed / {n_i} skipped)')
+                        to_remove.append(gp.dir_temp+b)
+                if n_e > 0:
+                    print(f'Did not remove batch {b} due to {n_e} failed insertions...')
+            except IndexError:
+                continue
+    print(f'Successful inserts:', success)
+    return to_remove
+    
     
 
 ##############################################################################################
@@ -382,8 +348,9 @@ def parse_item_data(path: str) -> dict:
     items = {}
     con = sqlite3.connect(path)
     con.row_factory = sqlite.row_factories.factory_dict
-    # for next_item in ItemController(path, augment_items=False, table=table, table_name='itemdb').all_items():
-    for next_item in con.execute("""SELECT id, item_id, item_name, members, alch_value, buy_limit, stackable, release_date, equipable, weight, update_ts FROM itemdb""").fetchall():
+    
+    for next_item in con.execute("""SELECT id, item_id, item_name, members, alch_value, buy_limit, stackable,
+                                    release_date, equipable, weight, update_ts FROM itemdb""").fetchall():
         items[next_item.get('item_id')] = next_item
     con.close()
     return items
@@ -393,24 +360,96 @@ def insert_items():
     """ Transfer all rows from idb to `db_path` """
     t_ = time.perf_counter()
     print(f' Updating item data...')
-    src_db = rbpi_dbs.get('item')
-    idb = ItemController(path=src_db.path, table_name=src_db.table, augment_items=False)
-    rows = []
-    for item_id, data in parse_item_data(path=src_db.path).items():
-        i = idb.get_item(item_id)
-        if i is None:
-            continue
-        if isinstance(i, Item):
-            i.__dict__.update(data)
-            rows.append(i.__dict__)
-            # idb.update_item(i)
-    idb.insert_rows(table_name=idb.table_name, rows=rows, replace=True)
-    idb.close()
+    import pickle
+    count = 0
+    db = sqlite3.connect(gp.f_db_local)
+    db_from = sqlite3.connect(gp.f_db_rbpi_item)
+    c = db_from.cursor()
+    db.row_factory, c.row_factory = factory_idx0, factory_idx0
+    new_items = tuple(frozenset(c.execute("SELECT DISTINCT item_id FROM itemdb").fetchall()).difference(db.execute("SELECT DISTINCT item_id FROM item").fetchall()))
+    c.row_factory = factory_dict
+    # for item_row in pickle.load(open(gp.f_db_item, 'rb')).to_dict(
+    #         'records'):
+    
+    # TODO: expand with data updates instead of just adding new items
+    for item_row in c.execute(f"SELECT * FROM itemdb WHERE item_id IN {new_items[1:-1]}"):
+        
+        item_row = {k: v for k, v in augment_itemdb_entry(Item(**item_row)).__dict__.items() if
+                    k in Item.sqlite_columns()}
+        # print(item_row)
+        # continue
+        # exit(1)
+        try:
+            db.execute(
+                """INSERT INTO "item" (id, item_id, item_name, members, alch_value, buy_limit, stackable, release_date,
+                equipable, weight, update_ts, augment_data, remap_to, remap_price, remap_quantity, target_buy,
+                target_sell, item_group) VALUES (:id, :item_id, :item_name, :members, :alch_value, :buy_limit,
+                :stackable, :release_date, :equipable, :weight, :update_ts, :augment_data, :remap_to, :remap_price,
+                :remap_quantity, :target_buy, :target_sell, :item_group)""",
+                item_row)
+            count += 1
+        except sqlite3.IntegrityError:
+            ...
+    # exit(1)
+    db.commit()
+    db.close()
+    print(f'\tAdded {count} new items')
+    # exit(1)
+    # src_db = rbpi_dbs.get('item')
+    # idb = ItemController(path=src_db.path, table_name=src_db.table, augment_items=False)
+    # rows = []
+    # for item_id, data in parse_item_data(path=src_db.path).items():
+    #     i = idb.get_item(item_id)
+    #     if i is None:
+    #         continue
+    #     if isinstance(i, Item):
+    #         i.__dict__.update(data)
+    #         rows.append(i.__dict__)
+    #         # idb.update_item(i)
+    # idb.insert_rows(table_name=idb.table_name, rows=rows, replace=True)
+    # idb.close()
     print(f'\tUpdated item data in {fmt.delta_t(time.perf_counter()-t_)}\n\n')
 
 
+def archive_rbpi_db_files(dir_src: str = gp.dir_temp, dir_dst: str = gp.dir_df_archive):
+    """
+    Convert the large db batches into dataframes and transfer them to the archive. This archive is originally designed
+    for short-term backups. For a more structured/properly organized timeseries backup, an extract from the timeseries
+    db file is probably more desirable.
+    *** SOURCE DB FILES ARE REMOVED UPON COMPLETION ***
+    
+    Parameters
+    ----------
+    dir_src : str, optional, global_values.path.dir_temp by default
+        Folder with all the source files
+    dir_dst : str, optional, global_values.path.dir_df_archive by default
+        Folder in which the dataframes are to be saved
+    
+    Notes
+    -----
+    Only db files that have a unix timestamp as their first 10 characters are processed. Underscores are stripped; if
+    the resulting file already exists, the new data will be merged with the existing dataframe.
+
+    """
+    from global_variables.values import min_avg5m_ts
+    for db_file in uf.get_files(src=dir_src, ext='db', full_path=False, add_folders=False):
+        try:
+            if not db_file[:10].isdigit():
+                continue
+            else:
+                db_ts = int(db_file[:10])
+                if db_ts > time.time() or db_ts < min_avg5m_ts:
+                    continue
+                db_path = dir_src+db_file
+        except IndexError:
+            continue
+        if db_to_df(db_path, out_dir=dir_dst):
+            os.remove(db_path)
 
 
 if __name__ == "__main__":
-    ...
+    archive_rbpi_db_files()
     
+    
+    
+    exit(123)

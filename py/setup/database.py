@@ -11,17 +11,18 @@ from collections.abc import Iterable
 
 import pandas as pd
 
+from import_parent_folder import recursive_import
+import global_variables.configurations as cfg
 import global_variables.osrs
 import global_variables.path as gp
 import global_variables.variables as var
-import global_variables.configurations as cfg
 import sqlite.databases as sql_db
 import util.str_formats
 from file.file import File
+from model.database import Database, sql_create_timeseries_item_table
+from sqlite.executable import create_index
 
-from model.database import Database
-from sqlite.executable_statements import create_index
-
+del recursive_import
 
 def setup_sqlite_db(local_path: File = None, timeseries_db_path: File = None, add_index: bool = False, hush: bool = False,
                     **kwargs):
@@ -328,12 +329,17 @@ def create_timeseries_db(db_file: str, item_ids: Iterable):
     con = sqlite3.connect(db_file)
     
     for i in item_ids:
-        con.execute(f"""CREATE TABLE "item{i:0>5}"("src" INTEGER NOT NULL CHECK (src BETWEEN 0 AND 4), "timestamp" INTEGER NOT NULL, "price" INTEGER NOT NULL DEFAULT 0 CHECK (price>=0), "volume" INTEGER NOT NULL DEFAULT 0 CHECK (volume>=0), PRIMARY KEY(src, timestamp) )""")
+        con.execute(sql_create_timeseries_item_table(i))
     con.commit()
     con.close()
 
 
 if __name__ == '__main__':
+    path = None
+    db = sqlite3.connect(gp.f_db_local)
+    db.row_factory = lambda c, row: row[0]
+    create_timeseries_db(path, db.execute("""SELECT DISTINCT item_id FROM item""").fetchall())
+    exit(1)
     print(type(gp.f_db_sandbox))
     db = sqlite3.connect(gp.f_db_sandbox)
     print(db.execute("SELECT MAX(timestamp) FROM avg5m").fetchone())

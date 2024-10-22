@@ -60,6 +60,7 @@ class AggregateFunction(abc.ABC):
         if isinstance(columns, str):
             self.columns = [columns]
         self.columns = str(tuple(columns))[1:-1].replace("'", "")
+        self.columns = self.columns.strip(",")
     
     def aggregate_select(self, suffix: str = '', columns: str or Iterable = None):
         """
@@ -83,5 +84,4 @@ class AggregateFunction(abc.ABC):
         
         if columns is not None:
             self.set_columns(columns)
-        
-        return self.cursor.execute(f"SELECT {self.name}({self.columns}) FROM '{self.table}' {suffix}")
+        return self.cursor.execute(f"SELECT {self.name}({self.columns}) FROM main.{self.table} {suffix}")

@@ -12,10 +12,9 @@ from gui.model.grid import TkGrid
 from gui.model.gui_widget import GuiWidget
 
 
-# Clickcommand is the method that is called when the button is pressed.
 class GuiButton(ttk.Button, GuiWidget):
     def __init__(self, frame, grid: TkGrid, grid_tag: str, command: Callable, textvariable=None, command_kwargs: dict=(),
-                 variable=None, event_bindings=(), width=None, **kwargs):
+                 variable=None, event_bindings=(), width=None, button_text: str = '', **kwargs):
         """ Class for setting up tk Button widget.
         A tk.Button built on top of the given frame with frequently used attributes, used to define tk elements in a
         standardized fashion. Commonly tweaked parameters can be passed as well. All parameters with the exception of

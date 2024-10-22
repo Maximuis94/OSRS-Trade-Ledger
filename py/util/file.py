@@ -316,5 +316,4 @@ def backup_localdb(db_path, backup_dir, min_cooldown: int, max_backups: int):
 
 if __name__ == '__main__':
     ...
-    print(load(r'C:\Users\Max Moons\Documents\GitHub\OSRS-Trade-Ledger\py\data\test.npy'))
     

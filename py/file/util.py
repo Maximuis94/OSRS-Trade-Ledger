@@ -470,4 +470,7 @@ def load(path, force_extension: bool = True, protocol: IOProtocol = None, except
     try:
         return protocol.load(set_ext(path, protocol.extension) if force_extension else path, **kwargs)
     except Exception as e:
-        return exception_handler(e=e, path=path)
+        if exception_handler is None:
+            raise e
+        else:
+            return exception_handler(e=e, path=path)

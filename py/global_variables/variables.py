@@ -18,7 +18,9 @@ from collections import namedtuple
 
 import numpy as np
 
+from import_parent_folder import recursive_import
 from global_variables.data_classes import Avg5mDatapoint, RealtimeDatapoint, WikiDatapoint, Transaction, Item
+del recursive_import
 
 
 #######################################################################################################################
@@ -38,7 +40,7 @@ tables = tables_timeseries + tables_local
 
 
 # Representation for the sqlite master schema
-SqliteSchema = namedtuple('SqliteSchema', ['type', 'name', 'tbl_name', 'rootpage', 'sql'])
+SqliteSchema = namedtuple('SqliteSchema', ['type', 'name', 'tbl_name', 'rootpage', 'sql'], defaults=(None,))
 
 
 tables_local_old = ['itemdb', 'transactions']
@@ -50,7 +52,7 @@ DataTypes = namedtuple('DataTypes', ['py', 'sql', 'df', 'default', 'np'])
 # Special DataTypes (non-nullable values like primary keys or timestamps)
 _dtype_pk_int = DataTypes(py=int, sql='INTEGER', df='UInt32', default=None, np=np.int32)
 _dtype_pk_bool = DataTypes(py=bool, sql='INTEGER', df='bool', default=None, np=np.bool)
-_dtype_pk_str = DataTypes(py=str, sql='TEXT', df='string', default=None, np=np.str)
+_dtype_pk_str = DataTypes(py=str, sql='TEXT', df='string', default=None, np=str)
 _dtype_unix = DataTypes(py=int, sql='INTEGER', df='UInt32', default=None, np=np.uint32)
 
 
@@ -64,7 +66,7 @@ _dtype_ui64 = DataTypes(py=int, sql='INTEGER', df='UInt64', default=0, np=np.uin
 _dtype_i64 = DataTypes(py=int, sql='INTEGER', df='int64', default=0, np=np.int64)
 _dtype_f32 = DataTypes(py=float, sql='REAL', df='float32', default=0.0, np=np.float32)
 _dtype_f64 = DataTypes(py=float, sql='REAL', df='float64', default=0.0, np=np.float64)
-_dtype_str = DataTypes(py=str, sql='TEXT', df='string', default='', np=np.str)
+_dtype_str = DataTypes(py=str, sql='TEXT', df='string', default='', np=str)
 
 
 # Dict with all columns used throughout the project and their respective DataTypes.
