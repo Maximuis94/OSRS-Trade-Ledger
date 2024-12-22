@@ -7,13 +7,12 @@ import sqlite3
 import time
 
 import pandas as pd
-
-from import_parent_folder import recursive_import
+from venv_auto_loader.active_venv import *
 import backend.download as dl
 import global_variables.path as gp
 import util.file as uf
 import sqlite.executable
-del recursive_import
+__t0__ = time.perf_counter()
 
 debug = False
 

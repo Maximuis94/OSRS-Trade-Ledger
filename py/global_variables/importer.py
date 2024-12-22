@@ -5,7 +5,7 @@ Use "from global_variables.import import *" to import all global_variables modul
 """
 import time
 
-from import_parent_folder import recursive_import
+from venv_auto_loader.active_venv import *
 import global_variables.path as gp
 import global_variables.local_file as gl
 import global_variables.variables as gd
@@ -20,7 +20,7 @@ import util.unix_time as ut
 import util.osrs as uo
 import util.file as uf
 import util.data_structures as ud
-del recursive_import
+__t0__ = time.perf_counter()
 
 # print(f'Setup Global Values in {1000*(t1 - gp.setup_start):.1f}ms')
 

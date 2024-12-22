@@ -30,7 +30,7 @@ import abc
 import sqlite3
 from collections.abc import Callable, Iterable
 
-from import_parent_folder import recursive_import
+from venv_auto_loader.active_venv import *
 
 
 class AggregateFunction(abc.ABC):

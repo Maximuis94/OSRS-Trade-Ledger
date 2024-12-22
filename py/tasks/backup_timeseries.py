@@ -16,7 +16,7 @@ import time
 from collections.abc import Iterable
 from typing import List
 
-from import_parent_folder import recursive_import
+from venv_auto_loader.active_venv import *
 import global_variables.osrs as go
 import global_variables.path as gp
 import util.file as uf
@@ -25,7 +25,7 @@ import util.str_formats as fmt
 from file.file import File
 from model.database import Database
 from model.timeseries import TimeseriesDB
-del recursive_import
+__t0__ = time.perf_counter()
 
 
 select_list = [

@@ -8,7 +8,7 @@ import datetime
 import threading
 import time
 
-import path
+import global_variables.path as path
 # import ts_util
 import util.str_formats as fmt
 

@@ -14,22 +14,21 @@ https://blog.teclado.com/python-abc-abstract-base-classes/
 import sqlite3
 import time
 from abc import ABC, abstractmethod
+from typing import Type
 
 from overrides import override
 
-from import_parent_folder import recursive_import
+from venv_auto_loader.active_venv import *
 from global_variables.importer import *
 from model.item import Item
 from global_variables.data_classes import Transaction as _Transaction
-del recursive_import
+__t0__ = time.perf_counter()
 
 
 # from model.database import Database as Db
 
 # This transaction_parser is used globally for fetching transactions.
 # transaction_db = Db(path=gp.f_db_transaction, parse_tables=True, read_only=True)
-
-
 
 
 class Transaction(_Transaction):
@@ -133,7 +132,7 @@ class Transaction(_Transaction):
         
     def sql_row(self):
         """ Return a dict that can be submitted to the database """
-        return {c: self.__dict__.get(c) for c in self.columns}
+        return {c: self.__getattribute__(c) for c in self.columns}
         
         
     # @abstractmethod
@@ -146,10 +145,21 @@ class Transaction(_Transaction):
     #     """ Undo this transaction from the given InventoryEntry object and return the modified InventoryEntry """
     #     ...
     
+    def check_duplicates(self, db_con: sqlite3.Connection) -> List[_Transaction]:
+        """Returns True if this Transaction has duplicate counterparts in the connected database"""
+        c = db_con.cursor()
+        c.row_factory = self.row_factory
+        return db_con.execute(
+            f"""SELECT * FROM "transaction" WHERE transaction_id!=? AND item_id=? AND timestamp=? AND is_buy=? AND quantity=? AND price=? AND status=1""",
+            (self.transaction_id, self.item_id, self.timestamp, int(self.is_buy), self.quantity, self.price)).fetchall()
+        
+    
     @staticmethod
     def factory_transaction(cursor: sqlite3.Cursor, r):
         """ Transaction factory that can be used to return database entries as Transactions """
         return Transaction(**{c[0]: r[i] for i, c in enumerate(cursor.description)})
+    
+    
     
 
 class Purchase(Transaction):

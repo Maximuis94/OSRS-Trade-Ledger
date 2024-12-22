@@ -8,11 +8,11 @@ from collections.abc import Iterable
 from typing import List, Dict, Callable, NamedTuple, Tuple
 
 
-from import_parent_folder import recursive_import
+from venv_auto_loader.active_venv import *
 import global_variables.variables as var
 from file.file import File
 from global_variables.data_classes import TimeseriesRow, Avg5mDatapoint, RealtimeDatapoint, WikiDatapoint
-del recursive_import
+__t0__ = time.perf_counter()
 
 def get_sorted_tuple(_list, reverse_sort: bool = False) -> tuple:
     """ Convert `_list` to a list, sort it and return it as a tuple. """

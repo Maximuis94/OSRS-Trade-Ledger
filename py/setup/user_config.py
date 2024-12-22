@@ -7,10 +7,10 @@ import os.path
 import time
 import pandas as pd
 
-from import_parent_folder import recursive_import
+from venv_auto_loader.active_venv import *
 from file.file import Root
 from file.local_file import generate_roots_config
-del recursive_import
+__t0__ = time.perf_counter()
 
 t_setup_start = time.perf_counter()
 
@@ -33,8 +33,8 @@ def setup_exception_resource_file(path: str):
     pd.DataFrame(columns=list(dtypes.keys())).astype(dtype=dtypes).to_csv(path, index_label='msg_idx')
 
 
-def setup_roots_json(project_dir: Root, dir_rbpi: Root, dir_archive: Root, dir_downloads: Root,
+def setup_roots_json(dir_rbpi: Root, dir_archive: Root, dir_downloads: Root,
                      dir_exchange_log_src: Root, *roots):
     """ Call this method to create the roots.json file, which can be used to determine several roots """
-    roots = (project_dir, dir_rbpi, dir_archive, dir_downloads, dir_exchange_log_src, *roots)
+    roots = (dir_rbpi, dir_archive, dir_downloads, dir_exchange_log_src, *roots)
     generate_roots_config(*roots, output_file='data/resources/roots.json')

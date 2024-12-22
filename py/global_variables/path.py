@@ -13,22 +13,26 @@ Folders outside the project's folder structure require to be specified by the us
     Should be evaluated once the project is up and running
 """
 import os
+import sys
 import time
 
-from import_parent_folder import recursive_import
+from venv_auto_loader.active_venv import *
 from file.file import File, Root
 from file.local_file import parse_roots_config, roots_config_error
 from setup.user_config import setup_roots_json
 
-del recursive_import
+__t0__ = time.perf_counter()
 
 t_ = time.perf_counter()
 
 setup_start = time.perf_counter()
+dir_root = os.path.commonpath([sys.prefix, __file__]).replace('\\', '/') + '/'
+# dir_root = os.path.commonpath([os.getcwd(), __file__]).replace('\\', '/') + '/'
+
 _cfg = None
 try:
-    _cfg = parse_roots_config(verbose=False)
-    project_dir = _cfg['project_dir']
+    _cfg = parse_roots_config(verbose=True)
+    dir_root = _cfg['pc_dir_root']
     dir_rbpi = _cfg['dir_rbpi']
     dir_exchange_log_src = _cfg['dir_exchange_log_src']
     dir_archive = _cfg['dir_archive']
@@ -46,24 +50,26 @@ exe_setup_template_db = None
 # Folders
 ##########################################################
 # This is the full path to the project root, change the working directory to this folder.
-print(f'Project root was set to {project_dir}')
+print(f'Project root was set to {dir_root}')
 
 # Below are full paths to folders used throughout the project
-dir_root = project_dir
-dir_data = project_dir + 'data/'
-dir_exe = project_dir + 'executables/'
-dir_output = project_dir + 'output/'
+dir_data = dir_root + 'data/'
+dir_exe = dir_root + 'executables/'
+dir_output = dir_root + 'output/'
 dir_logs = dir_output + 'log/'
 dir_temp = dir_data + 'temp/'
-dir_template = project_dir + 'template/'
+dir_template = dir_root + 'template/'
 dir_resources = dir_data + 'resources/'
 dir_exchange_log = dir_data + 'exchange_log/'
 dir_npy_arrays = dir_data + 'arrays/'
 dir_np_archive_league_III = dir_data + 'np_archive_league_III/'
 dir_plot_archive = dir_output + 'plots/'
 dir_compare_npy_analysis = dir_output + 'compare_npy_analysis/'
+dir_db_verification = dir_output + 'db_verification/'
 dir_logger = dir_output + 'log/'
 dir_npy_import = dir_data + 'npy_imports/'
+dir_item_production = dir_data + 'item_production/'
+dir_bank_memory = dir_data + 'bank_memory/'
 
 dir_batch = dir_data + 'batches/'
 dir_batch_merged = dir_batch + 'merged/'
@@ -95,6 +101,7 @@ f_tracked_items_listbox: File = File(dir_resources + 'tracked_items_listbox.dat'
 f_user_config: File = File(dir_resources + 'config.txt')
 f_exception_strings: File = File(dir_resources + 'exception_strings.csv')
 f_small_batch_log: File = File(dir_resources + 'small_batch_log.dat')
+f_dup_transactions: File = File(dir_data+'duplicate_transactions.txt')
 
 # f_db = dir_data + 'sqlite_database.db
 f_db_npy_array_data: File = File(dir_data + 'npy_timeseries.db')
@@ -195,10 +202,9 @@ def get_files(src: str, add_src: bool = False, extensions: list = None) -> list:
 if __name__ == "__main__":
     
     # print(parse_non_existent_files(dict(globals())))
-    setup_roots_json(**{root.var: root for root in (
-        Root(key='pc_root', path=None, var='project_dir'),
-        Root(key='pc_rbpi_root', path=None, var='dir_rbpi'),
-        Root(key='pc_archive_root', path=None, var='dir_archive'),
-        Root(key='pc_downloads_root', path=None, var='dir_downloads'),
-        Root(key='pc_exchange_log_root', path=None, var='dir_exchange_log_src'))})
+    # setup_roots_json(**{root.var: root for root in (
+    #     Root(key='pc_rbpi_root', path=None, var='dir_rbpi'),
+    #     Root(key='pc_archive_root', path=None, var='dir_archive'),
+    #     Root(key='pc_downloads_root', path=None, var='dir_downloads'),
+    #     Root(key='pc_exchange_log_root', path=None, var='dir_exchange_log_src'))})
     ...

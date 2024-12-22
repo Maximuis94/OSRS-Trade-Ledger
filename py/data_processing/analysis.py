@@ -15,11 +15,11 @@ import numpy as np
 import pandas as pd
 from multipledispatch import dispatch
 
-from import_parent_folder import recursive_import
+from venv_auto_loader.active_venv import *
 from global_variables.importer import *
 from model.item import Item
 from data_processing import util_proc as ud
-del recursive_import
+__t0__ = time.perf_counter()
 
 
 # El = namedtuple('El', ['t0', 't1', 'avg', 'relative'])

@@ -41,10 +41,8 @@ controller.timeseries
 # TODO Extensively test all methods
 
 """
-import abc
-from typing import NamedTuple, Container
+from typing import Container
 
-from sqlite.table import Table
 from util.sql import *
 
 

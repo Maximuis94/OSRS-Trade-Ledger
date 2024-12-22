@@ -6,9 +6,9 @@ from typing import Tuple
 
 import numpy as np
 
-from import_parent_folder import recursive_import
+from venv_auto_loader.active_venv import *
 import util.array as u_ar
-del recursive_import
+__t0__ = time.perf_counter()
 
 
 def avg_price_summed_volume(ar: np.ndarray, cols: list, n_elements: int, prefix: str) -> Tuple[np.ndarray, list]:

@@ -13,12 +13,12 @@ from typing import List
 
 from multipledispatch import dispatch
 
-from import_parent_folder import recursive_import
+from venv_auto_loader.active_venv import *
 import util.verify as verify
 import util.unix_time as ut
 from global_variables import path as gp
 from global_variables.data_classes import NpyDatapoint as Dp
-del recursive_import
+__t0__ = time.perf_counter()
 
 default_t1 = int(time.time())
 dp_select_prefix = f"""SELECT {str(Dp.__match_args__)[1:-1]} FROM """.replace("'", "")

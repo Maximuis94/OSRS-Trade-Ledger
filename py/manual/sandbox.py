@@ -1,3 +1,4 @@
+import datetime
 import os.path
 import sqlite3
 import time
@@ -5,14 +6,14 @@ import time
 import numpy as np
 import pandas as pd
 
-import ts_util
-from filter import evaluate_numerical_filter
-from ge_util import augment_itemdb_entry
-from global_values import id_name, remap_dict, db_wiki, db_avg5m, db_itemdb
-from ledger import Ledger
-from model_item import Item
-from path import f_outliers_csv, f_item_list_csv, f_runelite_loot_tracker_parsed, load_data, f_db_scraped_src
-from runelite_reader import generate_bank_tag, merge_runelite_jsons
+# import ts_util
+# from filter import evaluate_numerical_filter
+# from ge_util import augment_itemdb_entry
+# from global_values import id_name, remap_dict, db_wiki, db_avg5m, db_itemdb
+# from ledger import Ledger
+# from model_item import Item
+# from path import f_outliers_csv, f_item_list_csv, f_runelite_loot_tracker_parsed, load_data, f_db_scraped_src
+# from runelite_reader import generate_bank_tag, merge_runelite_jsons
 
 
 def get_reverse_remaps():
@@ -234,6 +235,12 @@ def filter_dropped_items(csv_file: str = None, extract_loot_tracker_jsons: bool 
 	
 
 if __name__ == "__main__":
+	import util.unix_time as ut
+	print(ut.loc_dt_unix(datetime.datetime(2024,10,20, 16)))
+	print(ut.loc_dt_unix(datetime.datetime(2024,10,21, 2)))
+	
+	exit(2)
+	
 	for next_id in (2, 6, 8):
 		i = Item.create_table(next_id)
 		

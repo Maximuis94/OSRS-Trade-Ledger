@@ -20,7 +20,7 @@ os.chdir(_cwd)
 _config_file = _cwd + _config_file
 _cwd = _cwd + '/'
 
-_vars_needed: tuple = ('project_dir', 'dir_rbpi', 'dir_exchange_log_src', 'dir_archive', 'dir_downloads')
+_vars_needed: tuple = ('pc_dir_root', 'dir_rbpi', 'dir_exchange_log_src', 'dir_archive', 'dir_downloads')
 
 
 def roots_config_error(e: Exception, cfg):
@@ -57,8 +57,9 @@ def parse_roots_config(path: str = None, vars_needed: Tuple[str] = None, verbose
                     if verbose:
                         print(f"\tgp.{root.var}={root.path}")
                 else:
-                    raise_exception = True
-                    warnings.warn(f"Loaded root for path variable {root.var} does not exist (path={root.path})")
+                    raise_exception = 'rbpi' not in root.path
+                    w = f"Loaded root for path variable {root.var} does not exist (path={root.path})"
+                    warnings.warn(w)
         except KeyError:
             continue
     if raise_exception:

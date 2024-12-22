@@ -457,7 +457,7 @@ class InventoryFrame(ttk.Frame):
         """ Button callback for 4h prices analysis. Alter various objects across the tab """
         self.header_label_se2.set_text("Currently no item selected")
         self.change_listbox_mode(m=2)
-        self.btn_clear_buy_list.text.set('Clear buy list')
+        self.btn_clear_buy_list._text.set('Clear buy list')
         self.clicked_clear = False
         self.cbtn_traded_at_top.set(True)
         self.prioritize_recent.set(False)
@@ -621,7 +621,7 @@ class InventoryFrame(ttk.Frame):
         # top.title(f'Setting target prices')
         if self.listbox_mode == 0:
             selected_item = self.listbox_top.submitted_entries[self.selected_id].get('item_name')
-            if selected_item is not None and not self.label_selected_entry.text.get() == 'No entry selected':
+            if selected_item is not None and not self.label_selected_entry._text.get() == 'No entry selected':
                 popup_target_prices(item_name=selected_item)
             
     def count_stock(self, e=None):
@@ -691,11 +691,11 @@ class InventoryFrame(ttk.Frame):
     def clear_buy_list(self, e=None):
         if not self.clicked_clear:
             self.clicked_clear = True
-            self.btn_clear_buy_list.text.set("Click to confirm")
+            self.btn_clear_buy_list._text.set("Click to confirm")
         else:
             self.buy_list = {}
             pd.DataFrame(columns=['item_name', 'price']).to_csv(p.f_buy_list, index=False)
-            self.btn_clear_buy_list.text.set("Clear buy list")
+            self.btn_clear_buy_list._text.set("Clear buy list")
             self.update_listbox()
     
     def reset_timespan(self, e=None):
@@ -721,7 +721,7 @@ class InventoryFrame(ttk.Frame):
         self.graph_id += 1
         if self.graph_id > self.max_graph_id:
             self.graph_id = 0
-        self.btn_change_graph.text.set(self.change_graph_btn_text[self.graph_id])
+        self.btn_change_graph._text.set(self.change_graph_btn_text[self.graph_id])
         self.refresh_graph(row=row)
 
     def lbox_top_onclick(self, e=None, force_idx: int = None):
@@ -752,7 +752,7 @@ class InventoryFrame(ttk.Frame):
         if not self.transferring_data:
             self.transferring_data = True
             try:
-                self.btn_update_data.text.set(self.str_transfer_b)
+                self.btn_update_data._text.set(self.str_transfer_b)
                 data_transfer = AsyncDataTransfer(full_transfer=True, callback_oncomplete=self.transfer_completed)
                 data_transfer.start()
             finally:
@@ -760,7 +760,7 @@ class InventoryFrame(ttk.Frame):
                 pass
     
     def transfer_completed(self):
-        self.btn_update_data.text.set(self.str_transfer_a)
+        self.btn_update_data._text.set(self.str_transfer_a)
         self.transferring_data = False
     
     def parse_ge_exports(self):
@@ -768,7 +768,7 @@ class InventoryFrame(ttk.Frame):
         if not self.parsing_exports:
             self.parsing_exports = True
             try:
-                self.btn_parse_ge_exports.text.set(self.str_parse_b)
+                self.btn_parse_ge_exports._text.set(self.str_parse_b)
                 json_parsing = AsyncJSONParse(callback_oncomplete=self.parse_completed)
                 json_parsing.start()
             finally:
@@ -778,19 +778,19 @@ class InventoryFrame(ttk.Frame):
     def parse_completed(self):
         """ Callback to execute upon completing the parse """
         self.compute_inventory(refresh_listbox=False)
-        self.btn_parse_ge_exports.text.set(self.str_parse_a)
+        self.btn_parse_ge_exports._text.set(self.str_parse_a)
         self.parsing_exports = False
         
     def compute_inventory_threaded(self):
         """ Asynchronously compute the current item balances by executing all submitted transactions """
         if not self.computing_inventory:
             self.computing_inventory = True
-            self.btn_compute_inventory.text.set(self.str_inv_b)
+            self.btn_compute_inventory._text.set(self.str_inv_b)
             try:
                 task = AsyncTask(task=self.compute_inventory)
                 task.start()
             finally:
-                self.btn_compute_inventory.text.set(self.str_inv_a)
+                self.btn_compute_inventory._text.set(self.str_inv_a)
                 self.computing_inventory = False
         
     def lbox_top_onclick_item(self, selected_row: dict):

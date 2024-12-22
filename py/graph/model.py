@@ -23,55 +23,31 @@ This model serves as an interface for the rather extensive matplotlib package.
 from collections import namedtuple
 from collections.abc import Callable, Iterable
 from abc import ABC, abstractmethod
-from typing import List, Tuple
+from typing import List, Tuple, Type
 
 from matplotlib import pyplot as plt, patches as mpatches
 
+from graph.components.color import Color
+from graph.components.datapoint import IAxis
+from graph.components.line import Line
 
 Datapoint = namedtuple('Datapoint', ['label', 'x', 'y'])
 Axis = namedtuple('Axis', ['label', 'format_tick', 'format_value', ])
 
 
-class RGB:
-    """"""
-    def __init__(self, r: int, b: int, g: int, a: float = 1.0):
-        self.red, self.blue, self.green, self.alpha = r, g, b, a
-        self.c = self.get_color_code((r, g, b))
-        self.rgb = (r, g, b, a)
-    
-    @staticmethod
-    def get_color_code(rgb: Tuple[int, int, int]) -> str:
-        """ Converts an r, g, b tuple into a color code """
-        return "#%02x%02x%02x" % rgb
-
-
-class Patch(mpatches.Patch):
-    """
-    A patch dictates the color assigned to a graph and it is set within the legend of the canvas.
-    
-    """
-    
-    def __init__(self, color: RGB, label: str, **kwargs):
-        super().__init__(color=color.rgb, label=label, **kwargs)
-        self.rgb = color
-
-
-class Graph(ABC):
+class Graph:
     label: str
     datapoints: List[Datapoint]
-    patch: Patch
-    x_range: Tuple[float, float]
-    y_range: Tuple[float, float]
+    line: Line
     
-    def __init__(self, label: str, datapoints: List[Datapoint], color: RGB, line_width: float = None,
-                 line_marker: str = None, line_style: str = None):
+    def __init__(self, label: str, datapoints: List[Datapoint], XAxis: Type[IAxis], yAxis: Type[IAxis], color: Color,
+                 **kwargs):
         self.label = label
         self.datapoints = datapoints
         
-        self.patch = Patch(color=color, label=label)
-        self.line_width = line_width
-        self.line_marker = line_marker
-        self.line_style = line_style
+        self.line = Line(color=color, **{k: kwargs[k] for k in frozenset(Line.__match_args__).intersection(kwargs)})
+        self.y_axis = Axis()
+        self.x_axis = Axis()
         
 
 class Canvas(ABC):

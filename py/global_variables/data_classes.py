@@ -31,20 +31,20 @@ Data Classes:
 collections.namedtuple:
     https://docs.python.org/3.10/library/collections.html#collections.namedtuple
 """
+import sqlite3
 from abc import ABC, abstractmethod
 from collections import namedtuple
 from collections.abc import Sequence
 from dataclasses import dataclass, field
-from typing import Tuple, NamedTuple
+from datetime import datetime
 
 import numpy as np
 from overrides import override
+from venv_auto_loader.active_venv import *
 
-from import_parent_folder import recursive_import
-import global_variables.path as gp
-from file.file import IFile
+__t0__ = time.perf_counter()
 
-del recursive_import
+_item_table: str = "item"
 
 
 #######################################################################################################################
@@ -92,7 +92,7 @@ ExeLogEntry = namedtuple('ExeLogEntry', ['transaction_id', 'timestamp', 'price',
                                          'n_bought', 'n_purchases', 'n_sold', 'n_sales'])
 
 
-@dataclass(order=True, match_args=True)
+@dataclass(order=True, match_args=True, slots=True)
 class Transaction:
     """
     Basic representation of a Transaction.
@@ -118,6 +118,14 @@ class Transaction:
     n_sold: int = field(default=0, compare=False)
     n_sales: int = field(default=0, compare=False)
     tax: int = field(default=0, compare=False)
+    
+    @staticmethod
+    def row_factory(c: sqlite3.Cursor, row: sqlite3.Row):
+        """Row factory that can be set to an SQLite Cursor"""
+        return Transaction(*row)
+    
+    def __str__(self):
+        return f"Transaction({', '.join([f'{k}={self.__getattribute__(k)}' for k in self.__match_args__])})"
     
     
 # Datapoint classes are datapoints of scraped data
@@ -344,6 +352,7 @@ class Item:
     target_buy: int = field(default=0, compare=False)
     target_sell: int = field(default=0, compare=False)
     item_group: str = field(default='', compare=False)
+    count_item: bool = field(default=1, compare=False)
     
     # Live trade data -- Not from local db item table
     current_ge: int = field(default=0, compare=False)
@@ -361,9 +370,42 @@ class Item:
     n_rt_s: int = field(default=-1, compare=False)
     
     @staticmethod
-    def sqlite_columns():
+    def sqlite_columns() -> Tuple[str, ...]:
         """ Return the columns of the Item as stored in the sqlite database """
-        return Item.__match_args__[:18]
+        return Item.__match_args__[:19]
+    
+    @staticmethod
+    def sql_select() -> str:
+        """SQL select statement for fetching all item attributes for all items from an SQLite db"""
+        return f"""SELECT ({", ".join(Item.sqlite_columns())}) FROM "{_item_table}" """
+    
+    @staticmethod
+    def row_factory(c: sqlite3.Cursor, row: sqlite3.Row):
+        """row factory method that can be set to an SQLite cursor"""
+        return Item(*row)
+    
+    def cast(self, var: str) -> datetime | int | float | str | bool:
+        """Convert attribute `var` to the correct type"""
+        if var in ["release_date", "update_ts"]:
+            return datetime.fromtimestamp(self.__getattribute__(var))
+        return self.__annotations__.get(var)(self.__getattribute__(var))
+    
+    def __int__(self):
+        return self.item_id
+    
+    def __str__(self):
+        return self.item_name
+    
+    def __repr__(self):
+        return "\n\t* ".join([f"OSRS Item {self.item_name} (id={self.item_id})"]+\
+                             [f"{el.capitalize()}: {self.cast(el)}"
+                              for el in self.__match_args__[2:11]])
+    
+    def __eq__(self, other):
+        return self.item_id == other.item_id
+    
+    def __ne__(self, other):
+        return self.item_id != other.item_id
     
 
 @dataclass(eq=False, match_args=True)
@@ -412,7 +454,3 @@ class NpyArray:
     avg5m_margin: np.ndarray
     realtime_margin: np.ndarray
     tax: np.ndarray
-
-
-if __name__ == '__main__':
-    ...

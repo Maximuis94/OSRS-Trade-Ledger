@@ -17,13 +17,14 @@ import numpy as np
 import pandas as pd
 from overrides import override
 
-from import_parent_folder import recursive_import
+from venv_auto_loader.active_venv import *
 import global_variables.configurations as cfg
 import global_variables.osrs as go
 import global_variables.path as gp
 import util.array as u_ar
 import util.file as uf
 import util.str_formats as fmt
+from util.logger import prt
 import util.unix_time as ut
 from controller.item import create_item, Item
 from data_processing.npy_array_computations import avg_price_summed_volume
@@ -32,7 +33,7 @@ from global_variables.data_classes import NpyDatapoint as NpyDp, NpyDatapoint
 from model.data_source import DataSource, SRC
 from model.database import Database
 from tasks.async_task import AsyncTask
-del recursive_import
+__t0__ = time.perf_counter()
 
 t_start = int(time.perf_counter())
 t_print = t_start
@@ -120,6 +121,8 @@ class NpyDbUpdater(Database):
         # if not _initialized:
         #     raise RuntimeError(f"Execute initialize() before starting any thread!")
         super().__init__(path=db_path, parse_tables=False)
+        
+        self.t_start = t_start if kwargs.get('start_time') is None else kwargs['start_time']
         self.thread_id = thread_id
         self.to_export = []
         self.check_stop_execution = check_stop_execution
@@ -223,12 +226,12 @@ class NpyDbUpdater(Database):
         global t_print
         t_print = int(time.perf_counter())
         try:
-            print(f'\t[{fmt.passed_pc(t_start)}] Items: {_items_done + 1}/{_n_to_do}  '
+            print(f'\t[{fmt.passed_pc(self.t_start)}] Items: {_items_done + 1}/{_n_to_do}  '
                       f'Db size: +{fmt.fsize(self.fsize() - _db_size_start)}  '
                       f'Rows [+ {_rows_exported} / - {_rows_deleted}]  {_files_imported} files imported into db'
                       f'Avg/item: {fmt.delta_t(sum(exe_times_item) / len(exe_times_item))}', end='\r')
         except ZeroDivisionError:
-            print(f'\t[{fmt.passed_pc(t_start)}] Items: {_items_done + 1}/{_n_to_do}  '
+            print(f'\t[{fmt.passed_pc(self.t_start)}] Items: {_items_done + 1}/{_n_to_do}  '
                   f'Db size: +{fmt.fsize(self.fsize() - _db_size_start)}  '
                   f'Rows [+ {_rows_exported} / - {_rows_deleted}]  {_files_imported} files imported into db', end='\r')
             
@@ -416,6 +419,9 @@ class NpyDbUpdater(Database):
         self.update_item_id()
         if t0 is None:
             t0 = self.execute(f"""SELECT MAX(timestamp) FROM "item{self.item_id:0>5}" """, factory=0).fetchone()
+            if t0 is None:
+                t0 = self.t0
+                t1 = self.t1
         t0 = t0 - t0 % 300
         
         if t0 >= self.t1-300 or \
@@ -672,17 +678,23 @@ class NpyDbUpdater(Database):
         else:
             self.prices_listbox = self.prices_listbox_path.load()
         to_do = [i[0] if isinstance(i, tuple) else i for i in to_do]
-        n_to_do = len(to_do)
+        n_to_do, n_failed = len(to_do), 0
         print('')
         print(f'\tUpdating Listbox. Processed 0/{n_to_do} items...      ', end='\r')
         for idx, item_id in enumerate([i for i in to_do if go.id_name[i] is not None]):
-            print(f'\tUpdating Listbox. Processed {idx+1}/{n_to_do} items...      ', end='\r')
+            print(f'\t[{fmt.passed_pc(self.t_start)}] Updating Listbox. Processed {idx+1}/{n_to_do} items...', end='\r')
             try:
-                self.update_prices_listbox_entry(item_id, cur_t1=self.prices_listbox.get(item_id)[0].get('t0'))
-            except TypeError:
-                self.update_prices_listbox_entry(item_id)
+                try:
+                    self.update_prices_listbox_entry(item_id, cur_t1=self.prices_listbox.get(item_id)[0].get('t0'))
+                except TypeError:
+                    self.update_prices_listbox_entry(item_id)
+            except AttributeError as e:
+                n_failed += 1
+                print(f"Failed to create listbox entry for item {go.id_name[item_id]} "
+                      f"({n_failed} {'entry' if n_failed == 1 else 'entries'} failed so far)")
+                
         self.prices_listbox_path.save(self.prices_listbox)
-        print(f'\nUpdated {n_to_do} listbox entries in {fmt.passed_pc(t_listbox)}')
+        print(f'\n\t[{fmt.passed_pc(self.t_start)}] Updated {n_to_do} listbox entries in {fmt.passed_pc(t_listbox)}')
     
     def update_prices_listbox_entry(self, item_id: int, _n_rows: int = cfg.prices_listbox_days, n_intervals: int = 6, cur_t1: dict = None):
         """
@@ -715,7 +727,10 @@ class NpyDbUpdater(Database):
         """
         if self.prices_listbox is None:
             raise TypeError
-        interval_start = self.execute(f"SELECT MAX(timestamp) FROM item{item_id:0>5}", factory=0).fetchone()-86100
+        try:
+            interval_start = self.execute(f"SELECT MAX(timestamp) FROM item{item_id:0>5}", factory=0).fetchone()-86100
+        except TypeError:
+            interval_start = self.t0
         interval_size = int(24 / n_intervals)*3600
         
         # Fix for missing entries (would otherwise
@@ -859,7 +874,7 @@ def importer_task(src_dir=gp.dir_npy_import, min_runtime: int = 15, can_proceed:
     while can_proceed():
         import_files(src_dir=src_dir, npy_db=gp.f_db_npy)
         time.sleep(3)
-    print(f"\n\tImporter thread was completed! Updating listbox...                               ")
+    prt(f"Importer thread was completed! Updating listbox...                               ", n_newline=1, n_indent=1)
     NpyDbUpdater(listbox_updater=True, thread_id=4)
 
 
@@ -977,10 +992,11 @@ class UpdaterThreadManager:
     db_to: File = gp.f_db_npy
     npy_columns: Tuple[str] = NpyDatapoint.__match_args__
     
-    def __init__(self, n_threads: int = 3, item_ids: List[int] = go.npy_items):
+    def __init__(self, n_threads: int = 3, item_ids: List[int] = go.npy_items,
+                 start_time: int or float = time.perf_counter()):
         self.threads = []
         self.n_threads = n_threads
-        self.start_time = 0
+        self.start_time = start_time
         self.t0: int = 0
         self.t1: int = 0
         self.item_ids: List[int] = item_ids
@@ -1021,7 +1037,6 @@ class UpdaterThreadManager:
             self.threads.append(_thread)
 
         print(f"\t[{fmt.passed_pc(self.start_time)}] Starting threads...")
-        self.start_time = time.perf_counter()
         for idx, t in enumerate(self.threads):
             # print(f"[{fmt.passed_pc(self.start_time)}] Starting thread {idx+1}...")
             t.start()
@@ -1029,13 +1044,12 @@ class UpdaterThreadManager:
         self.import_thread.start()
         
         self.n_threads = len(self.threads)
-        tpc = time.perf_counter()
         len_import_files = 1
         while self.n_threads > 0 or len_import_files > 0 or self.importer_active:
             time.sleep(2)
             len_import_files = len(uf.get_files(gp.dir_npy_import, ext='dat', full_path=False))
             if len_import_files + self.n_remaining > 0:
-                print(f"\t[{fmt.passed_pc(tpc)}] n_threads active: {self.n_threads} | "
+                print(f"\t[{fmt.passed_pc(self.start_time)}] n_threads active: {self.n_threads} | "
                       f"n_import files: {len_import_files} | Items remaining: {self.n_remaining}                 ",
                       end='\r')
             else:
@@ -1043,7 +1057,7 @@ class UpdaterThreadManager:
                 for t in self.threads:
                     
                     t.join()
-        print(f"\t[{fmt.passed_pc(tpc)}] Done")
+        print(f"\t[{fmt.passed_pc(self.start_time)}] Done")
     
     def decrease_n_to_do(self, value: int = 1):
         """ Method for decreasing the items remaining count by `value` """
@@ -1071,7 +1085,7 @@ class UpdaterThreadManager:
         t1 = int(round(t1 / cfg.npy_round_t1, 0) * cfg.npy_round_t1)
         self.t0 = t1 - t1 % cfg.npy_round_t0 - cfg.npy_db_timespan_days * 86400
         self.t1 = t1 - t1 % cfg.npy_round_t1
-        print(f"\tTimestamp range was set to {ut.loc_unix_dt(self.t0)} - {ut.loc_unix_dt(self.t1)}")
+        prt(f"Timestamp range was set to {ut.loc_unix_dt(self.t0)} - {ut.loc_unix_dt(self.t1)}")
         self.timestamps_configured = True
     
     def sort_queue(self, criterion: str = 'MAX(timestamp)', na_value: int = 0, reverse_sort: bool = True):
@@ -1118,18 +1132,31 @@ class UpdaterThreadManager:
         self.n_created = 0
         self.n_deleted = 0
         n = len(self.item_ids)
-        print(f"\tPreparing database...")
+        prt(f"Preparing database...")
         for idx, i in enumerate(self.item_ids):
-            t0 = con.execute(f"""SELECT MIN(timestamp) FROM "item{i:0>5}" """).fetchone()
-            t1 = con.execute(f"""SELECT MAX(timestamp) FROM "item{i:0>5}" """).fetchone()
-            t1 = t1 - t1 % 3600 - 300
-            
-            print(f"\t[{idx+1}/{n}] Current item_id={i} | t0={ut.loc_unix_dt(t0)} | t1={ut.loc_unix_dt(t1)}", end='\r')
-            
+            try:
+                t0 = con.execute(f"""SELECT MIN(timestamp) FROM "item{i:0>5}" """).fetchone()
+                if t0 is None:
+                    t0 = 0
+                t1 = con.execute(f"""SELECT MAX(timestamp) FROM "item{i:0>5}" """).fetchone()
+                if t1 is None:
+                    t1 = 0
+                else:
+                    t1 = t1 - t1 % 3600 - 300
+                print(f"\t[{idx+1}/{n}] Current item_id={i} | t0={ut.loc_unix_dt(t0)} | t1={ut.loc_unix_dt(t1)}", end='\r')
+            except sqlite3.OperationalError as e:
+                if "no such table" in str(e):
+                    t0 = None
+                    
+                else:
+                    raise e
+                    
             if t0 is None:
                 t0, t1 = 0, 0
                 self.create_table(con=con, item_id=i)
                 self.n_created += 1
+                print(f"\t[{idx + 1}/{n}] Current item_id={i} | t0={ut.loc_unix_dt(t0)} | t1={ut.loc_unix_dt(t1)}",
+                      end='\r')
             # Mark this id to be skipped
             if t1 >= self.t1:
                 self.skip_ids.append(i)
@@ -1150,9 +1177,9 @@ class UpdaterThreadManager:
         keys = list(self.item_t1.keys())
         keys.sort()
         self.item_t1 = {self.item_t1.get(k)[0]: self.item_t1.get(k)[1] for k in keys if self.item_t1.get(k)[0] in self.to_do}
-        
-        print(f"\n\tPreprocessed DB in {fmt.delta_t(time.time()-_t0)} | "
-              f"New tables: {self.n_created}, rows deleted: {self.n_deleted}, n_to_do: {len(self.to_do)}")
+        print("")
+        prt(f"Preprocessed DB in {fmt.delta_t(time.time()-_t0)} | "
+            f"New tables: {self.n_created}, rows deleted: {self.n_deleted}, n_to_do: {len(self.to_do)}")
         if self.database_preprocessed:
             return
         self.database_preprocessed = True
@@ -1166,7 +1193,11 @@ class UpdaterThreadManager:
     
     def create_table(self, con: sqlite3.Connection, item_id: int):
         """ Create a new table for `item_id` and increase the `n_created` counter by 1 """
-        con.execute(f"""CREATE TABLE "item{item_id:0>5}"{_columns} VALUES {_values}""")
+        # print(_columns, _values)
+        # print()
+        # print(f"""CREATE TABLE "item{item_id:0>5}" {_columns} VALUES ({", ".join(["?" for _ in range(len(_columns))])})""")
+        # con.execute(f"""CREATE TABLE "item{item_id:0>5}" {_columns} VALUES ({", ".join(["?" for _ in range(len(_columns))])})""")
+        con.execute(NpyDbUpdater.get_create_table_sql(item_id))
         con.commit()
         self.n_created += 1
         return

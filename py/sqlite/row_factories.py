@@ -40,11 +40,11 @@ import sqlite3
 from collections.abc import Callable
 from enum import Enum
 
-from import_parent_folder import recursive_import
+from venv_auto_loader.active_venv import *
 from global_variables.data_classes import TimeseriesDatapoint
 from global_variables.variables import types, SqliteSchema
 from global_variables.data_classes import *
-del recursive_import
+__t0__ = time.perf_counter()
 
 
 def factory_idx0(c: sqlite3.Cursor, row: tuple):

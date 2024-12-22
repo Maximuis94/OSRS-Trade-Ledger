@@ -11,7 +11,7 @@ from collections.abc import Iterable
 
 import pandas as pd
 
-from import_parent_folder import recursive_import
+from venv_auto_loader.active_venv import *
 import global_variables.configurations as cfg
 import global_variables.osrs
 import global_variables.path as gp
@@ -22,7 +22,7 @@ from file.file import File
 from model.database import Database, sql_create_timeseries_item_table
 from sqlite.executable import create_index
 
-del recursive_import
+__t0__ = time.perf_counter()
 
 def setup_sqlite_db(local_path: File = None, timeseries_db_path: File = None, add_index: bool = False, hush: bool = False,
                     **kwargs):
@@ -108,7 +108,7 @@ def setup_sqlite_db(local_path: File = None, timeseries_db_path: File = None, ad
     if local_path is not None:
         prt(f'Attempting to setup local db at {local_path}...')
         db = Database(path=local_path, parse_tables=False, tables=[sql_db.item, sql_db.transaction])
-        db.create_tables(tables=[sql_db.item, sql_db.transaction], hush=hush, if_not_exists=not new_db)
+        db.create_tables(tables=[sql_db.item, sql_db.transaction, sql_db.executed_transactions], hush=hush, if_not_exists=not new_db)
         prt(f'Successfully setup local db with tables transaction and item')
         
         if add_index:

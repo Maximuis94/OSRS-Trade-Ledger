@@ -9,7 +9,7 @@ from typing import List, Tuple
 
 import numpy as np
 
-from import_parent_folder import recursive_import
+from venv_auto_loader.active_venv import *
 from backend.download import realtime_prices
 from global_variables.importer import *
 from model.data_source import SRC
@@ -17,7 +17,7 @@ from model.database import Database
 from model.item import Item
 from sqlite.row_factories import factory_dict
 
-del recursive_import
+__t0__ = time.perf_counter()
 
 target_prices_eval_t0 = 1714065700 #int(time.time() - gc.timespan_target_prices_eval*86400)
 eval_t1 = int(time.time())

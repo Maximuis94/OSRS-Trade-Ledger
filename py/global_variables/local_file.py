@@ -15,13 +15,13 @@ import datetime
 
 from overrides import override
 
-from import_parent_folder import recursive_import
+from venv_auto_loader.active_venv import *
 import backend.download as dl
 import global_variables.configurations as cfg
 import global_variables.path as gp
 from global_variables.classes import SingletonMeta
 from model.local_file import LocalFile, FlagFile
-del recursive_import
+__t0__ = time.perf_counter()
 debug = True
     
 

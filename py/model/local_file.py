@@ -18,13 +18,13 @@ from typing import List
 import numpy as np
 import pandas as pd
 
-from import_parent_folder import recursive_import
+from venv_auto_loader.active_venv import *
 import global_variables.path as gp
 import util.file as uf
 import util.unix_time as ut
 from file.file import File
 from global_variables.classes import SingletonMeta
-del recursive_import
+__t0__ = time.perf_counter()
 
 debug = True
 

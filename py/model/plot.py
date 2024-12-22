@@ -5,10 +5,10 @@ Model class for a plot
 import sqlite3
 from collections.abc import Callable
 
-from import_parent_folder import recursive_import
+from venv_auto_loader.active_venv import *
 from global_variables.data_classes import PlotStats
 from sqlite.row_factories import timeseries_row_factory
-del recursive_import
+__t0__ = time.perf_counter()
 
 
 class Plot:

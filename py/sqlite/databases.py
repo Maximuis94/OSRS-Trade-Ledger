@@ -5,10 +5,10 @@ Databases are composed via a set of Tables, which are in turn composed via a set
 The databases as they are defined here should correspond with the column orderings as implemented in sqlite.row
 """
 
-from import_parent_folder import recursive_import
+from venv_auto_loader.active_venv import *
 from global_variables.path import f_db_local, f_db_timeseries
 from model.table import Column, Table
-del recursive_import
+__t0__ = time.perf_counter()
 
 
 avg5m = Table(table_name='avg5m', db_file=f_db_timeseries,
@@ -58,7 +58,8 @@ item = Table(table_name='item', db_file=f_db_local,
                  Column(name='remap_quantity', add_check=True),
                  Column(name='target_buy', add_check=True),
                  Column(name='target_sell', add_check=True),
-                 Column(name='item_group')
+                 Column(name='item_group'),
+                 Column(name='count_item', default_value=1)
              ])
 
 
@@ -83,7 +84,29 @@ transaction = Table(table_name='transaction', db_file=f_db_local,
                         Column(name='n_sold', is_nullable=False, default_value=0),
                         Column(name='n_sales', is_nullable=False, default_value=0),
                         Column(name='tax', is_nullable=False, default_value=0)
-                        
+                    
                     ])
 
+
+executed_transactions = Table(table_name='results', db_file=f_db_local,
+                              columns=[
+                                  Column(name='transaction_id', is_primary_key=True),
+                                  Column(name='item_id', is_nullable=False),
+                                  Column(name='average_buy', is_nullable=False, default_value=0),
+                                  Column(name='balance', is_nullable=False, default_value=0),
+                                  Column(name='profit', is_nullable=False, default_value=0),
+                                  Column(name='value', is_nullable=False, default_value=0),
+                                  Column(name='n_bought', is_nullable=False, default_value=0),
+                                  Column(name='n_purchases', is_nullable=False, default_value=0),
+                                  Column(name='n_sold', is_nullable=False, default_value=0),
+                                  Column(name='n_sales', is_nullable=False, default_value=0),
+                                  Column(name='tax', is_nullable=False, default_value=0)
+                              ])
+
 tables = {k: t for k, t in dict(locals()).items() if isinstance(t, Table)}
+
+
+if __name__ == '__main__':
+    print(Column(name='exclude_from_item_count', default_value=1).create())
+    
+    # print(executed_transactions.sql_create_table())

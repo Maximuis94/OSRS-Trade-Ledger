@@ -82,17 +82,20 @@ from collections.abc import Iterable, Sized
 import numpy as np
 import pandas as pd
 
-from import_parent_folder import recursive_import
+from venv_auto_loader.active_venv import *
 import global_variables.configurations as cfg
 import global_variables.osrs as go
 import global_variables.path as gp
 import util.file as uf
 import util.unix_time as ut
+import util.str_formats as fmt
+from util.logger import prt
 from controller.item import remap_item, create_item
 from file.file import File
 from model.item import Item
 from model.transaction import Transaction
-del recursive_import
+__t0__ = time.perf_counter()
+_db_path = gp.f_db_local
 
 # import global_values
 # import path
@@ -110,7 +113,7 @@ del recursive_import
 # Log each line that is parsed during this session with the same timestamp
 update_ts = int(time.time())
 
-t = time.time()
+ct = time.time()
 print(f'Using debug input data!')
 
 # TODO: Implement stock correction logic using pending buy/sell transactions as described below
@@ -122,9 +125,11 @@ immutable_attributes = ('slot', 'item', 'max', 'offer', 'is_buy')
 renamed_immutable_attributes = ('slot_id', 'item_id', 'max_quantity', 'price', 'is_buy')
 
 
-def get_next_transaction_id() -> int:
-    return sqlite3.connect(database=f'file:{gp.f_db_local}?mode=ro', uri=True)\
-        .execute("SELECT MAX(transaction_id) FROM 'transaction'").fetchone()[0]+1
+def get_next_transaction_id(db_con: sqlite3.Connection = None) -> int:
+    """Returns the next transaction_id to insert"""
+    if db_con is None:
+        db_con = sqlite3.connect(database=f"file:{_db_path}?mode=ro", uri=True)
+    return db_con.execute("SELECT MAX(transaction_id) FROM 'transaction'").fetchone()[0]+1
 
 
 def parse_line(i: str) -> dict:
@@ -151,8 +156,9 @@ def parse_line(i: str) -> dict:
     #     pass
     
     else:
-        raise ValueError(f"Line {i} could not be identified as json/text/tabulated")
-    
+        if len(i) > 2:
+            raise ValueError(f"Line {i} could not be identified as json/text/tabulated")
+        return None
     # Make sure the variables are named as they are throughout the project
     # Transaction()
     return {'timestamp': ts, 'is_buy': is_buy, 'item_id': item_id, 'quantity': quantity, 'price': price,
@@ -225,17 +231,19 @@ def update_submitted_lines(log_file: File = gp.f_submitted_lines_log, ts_thresho
     """ Remove all lines from the submitted lines log that are no longer relevant """
     submitted_lines, temp_file = open(log_file.path, 'r').readlines(), log_file.path.replace('.log', '_.log')
     filtered_lines, removed_lines = [], []
-    print('Removing expired submitted lines...')
+    prt('Removing expired submitted lines...')
     
     # Get all lines that do not exceed threshold
     for next_line in submitted_lines:
         e = ExchangeLogLine(parse_line(next_line))
+        if e is None:
+            continue
         if e.timestamp > ts_threshold:
             filtered_lines.append(next_line)
         else:
             # print(f'\t{next_line}')
             removed_lines.append(next_line)
-    print(f'Removed {len(removed_lines)} expired lines')
+    prt(f'Removed {len(removed_lines)} expired lines')
     
     # Export lines to temp file
     with open(temp_file, 'w') as submission_log:
@@ -272,6 +280,8 @@ def process_logs(queue_file: File = gp.f_exchange_log_queue, elog_dir: str = gp.
 
 
     """
+    
+    prt(f"Parsing and uploading Runelite Transaction logs...", n_indent=0)
     # Length the file name after completing the log, i.e. exchange_2023-12-21.log
     to_do = [File(gp.dir_exchange_log_src + f) for f in gp.get_files(src=gp.dir_exchange_log_src, extensions=['log']) if len(f) in len_log_file]
     if len(to_do) > 1:
@@ -279,7 +289,7 @@ def process_logs(queue_file: File = gp.f_exchange_log_queue, elog_dir: str = gp.
     if add_current:
         to_do.append(gp.f_runelite_exchange_log)
     queue_data = ['item_id', 'timestamp', 'is_buy', 'quantity', 'price']
-    print(to_do)
+    # prt(to_do)
     if not queue_file.exists():
         queue = []
         queue_file.save(queue)
@@ -287,12 +297,12 @@ def process_logs(queue_file: File = gp.f_exchange_log_queue, elog_dir: str = gp.
         queue = queue_file.load()
         if not isinstance(queue, Sized):
             raise TypeError
-        print(f'Loaded queue of length {len(queue)}')
+        prt(f'Loaded queue of length {len(queue)}')
         # print(queue)
     
     # If the queue is empty and there are no new completed log files, abort execution
     if len(queue) == 0 and len(to_do) == 0:
-        print(f'No new transactions were found to submit, aborting...')
+        prt(f'No new transactions were found to submit, aborting...')
         return False
     
     if not gp.f_submitted_lines_log.exists():
@@ -303,7 +313,7 @@ def process_logs(queue_file: File = gp.f_exchange_log_queue, elog_dir: str = gp.
     for log_file in to_do:
         incomplete_log = log_file.path == gp.f_runelite_exchange_log.path
         if not os.path.exists(log_file):
-            print(f"\tNon-existent log file at {log_file}")
+            prt(f"Non-existent log file at {log_file}")
             continue
         
         # This is a list with all lines that have been parsed and will be archived at some point.
@@ -313,16 +323,18 @@ def process_logs(queue_file: File = gp.f_exchange_log_queue, elog_dir: str = gp.
             
             for next_line in log.readlines():
                 entry = ExchangeLogLine(parse_line(next_line))
+                if entry is None:
+                    continue
                 if entry.status == 1 and (entry.quantity > 1 or entry.item_id == 13190) and \
                         next_line not in submitted_lines:
-                    queue.append({k: i for k, i in entry.__dict__.items() if k in queue_data})
+                    queue.append({k: i for k, i in entry.to_dict().items() if k in queue_data})
                     if incomplete_log:
                         new_subs.append(next_line)
                     n_added += 1
                 as_npy.append(entry.to_list(list_dtype='npy_int'))
             if n_added > 0:
                 queue_file.save(queue)
-                print(f'Saved queue with {n_added} new entries from {log_file.file}')
+                prt(f'Saved queue with {n_added} new entries from {log_file.file}')
             
             # TODO: Implement robust archiving system
             # Archive parsed lines as npy arrays and by simply moving the log to an archive dir
@@ -338,6 +350,17 @@ def process_logs(queue_file: File = gp.f_exchange_log_queue, elog_dir: str = gp.
             np.save(file=dst_file.replace(ext, '.npy'), arr=np.array(as_npy))
             os.rename(log_file.path, dst_file)
     return True
+
+
+def has_duplicate_transaction(db_con: sqlite3.Connection, transaction: Transaction) -> bool:
+    """Return True if this Transaction is likely to have been previously submitted"""
+    cursor = db_con.cursor()
+    cursor.row_factory = Transaction.row_factory
+    
+    return len(cursor.execute(f"""SELECT * FROM "transaction" WHERE transaction_id!=? AND item_id=? AND timestamp=? AND is_buy=? AND quantity=? AND price=? AND status=1""",
+                              tuple([int(transaction.__getattribute__(_v)) for _v in
+                                     ("transaction_id", "item_id", "timestamp", "is_buy", "quantity", "price")])
+                              ).fetchall()) > 0
 
 
 def submit_transaction_queue(queue_file: File = gp.f_exchange_log_queue, submit_data: bool = True, min_ts: int = None,
@@ -369,16 +392,17 @@ def submit_transaction_queue(queue_file: File = gp.f_exchange_log_queue, submit_
     
     update_ts = int(time.time())
     q = pd.DataFrame(queue_file.load())
-    submitted = []
+    submitted, n_submissions = [], 0
+
     if len(q) > 0:
         q['item_id'] = q['item_id'].apply(lambda r: r if isinstance(r, int) else r.item_id)
         n = len(q)
         q = q.sort_values(by=['timestamp', 'item_id', 'is_buy'], ascending=[True, True, False]).drop_duplicates()
         if n != len(q):
-            print(f"{n - len(q)}/{n} duplicate entries have been removed from the queue")
-        
-        con = sqlite3.connect(gp.f_db_local)
-        c = con.cursor()
+            prt(f"{n - len(q)}/{n} duplicate entries have been removed from the queue")
+            
+        db_con = sqlite3.connect(_db_path)
+        c = db_con.cursor()
         t_id = c.execute("""SELECT MAX(transaction_id) FROM 'transaction' """).fetchone()[0]
         sql_exe = "INSERT INTO 'transaction'(transaction_id, item_id, timestamp, is_buy, quantity, price, " \
                   "status, tag, update_ts) VALUES(:transaction_id, :item_id, :timestamp, :is_buy, " \
@@ -390,10 +414,9 @@ def submit_transaction_queue(queue_file: File = gp.f_exchange_log_queue, submit_
             if isinstance(min_ts, int) and t.get('timestamp') < min_ts:
                 print(f'Skipped {t}')
                 continue
-            t_id += 1
             
             # TODO add method to convert parsed line to Transaction
-            t = Transaction(transaction_id=get_next_transaction_id(),
+            t = Transaction(transaction_id=get_next_transaction_id(db_con),
                             item_id=t.get('item_id'),
                             timestamp=t.get('timestamp'),
                             is_buy=t.get('is_buy'),
@@ -402,39 +425,54 @@ def submit_transaction_queue(queue_file: File = gp.f_exchange_log_queue, submit_
                             status=1,
                             tag='e',
                             update_ts=update_ts)
-            t.item_id, t.price, t.quantity = remap_item(item=create_item(item_id=t.item_id), price=t.price, quantity=t.quantity)
-            t.transaction_id = t_id
+            t.item_id, t.price, t.quantity = remap_item(
+                item=create_item(item_id=t.item_id), price=t.price, quantity=t.quantity)
             try:
                 if isinstance(t.item_id, Item):
                     t.item = create_item(t.item_id.item_id)
                     t.item_id = t.item.item_id
-                c.execute(sql_exe, t.__dict__)
+                duplicates = t.check_duplicates(db_con)
+                n_dup = len(duplicates)
+                if n_dup == 0:
+                    c.execute(sql_exe, t.sql_row())
+                else:
+                    print("\nDid not submit the following transaction:")
+                    print(str(t))
+                    print(f"On grounds of {n_dup} duplicate Transaction{'s' if n_dup > 1 else ''}:")
+                    with open(gp.f_dup_transactions, 'a') as f:
+                        for _transaction in duplicates:
+                            print(_transaction)
+                            f.write(str(_transaction))
+                    
                 # t = l.submit_transaction(t.__dict__, commit_transaction=False, con=con, update_ts=update_ts)
                 submitted.append(t)
             # TODO: think of and implement relevant exceptions
             except OSError:
                 # Something went wrong; add the entry to queue.
-                print(f'\t*** Failed to submit {t if isinstance(t, dict) else t.__dict__} ***')
-                queue.append({k: t.__dict__.get(k) for k in queue_vars})
-    
-        # Done; commit sqlite database and overwrite the queue file.
-        if submit_data:
-            con.commit()
-            con.close()
-            queue_file.save(queue)
-
-    uf.backup_localdb(db_path=gp.f_db_local, backup_dir=gp.dir_backup_localdb,
-                      min_cooldown=cfg.localdb_backup_cooldown, max_backups=cfg.max_localdb_backups)
+                t_dict = t.sql_row()
+                prt(f'*** Failed to submit {str(t)} ***')
+                queue.append({k: t_dict for k in queue_vars})
+        n_submissions = len(submitted)
         
+        # Done; commit sqlite database and overwrite the queue file.
+        if submit_data and n_submissions > 0:
+            db_con.commit()
+            queue_file.save(queue)
+            uf.backup_localdb(db_path=_db_path, backup_dir=gp.dir_backup_localdb,
+                              min_cooldown=cfg.localdb_backup_cooldown, max_backups=cfg.max_localdb_backups)
+        else:
+            prt(f"Did not create a new localDB backup, as no new transactions were submitted")
+        db_con.close()
+    
     # Export submissions to a readable csv file
     try:
         if csv_file is not None:
             dat_file = File(csv_file.replace('.csv', '.dat'))
             if csv_file.exists():
-                df = pd.concat([pd.read_pickle(dat_file), pd.DataFrame([t.__dict__ for t in submitted])])
+                df = pd.concat([pd.read_pickle(dat_file), pd.DataFrame([t.sql_row() for t in submitted])])
             else:
-                df = pd.DataFrame([t.__dict__ for t in submitted])
-            df['item_name'] = df.apply(lambda r: r.item_name if isinstance(r, Item) else go.id_name[r.get('item_id')], axis=1)
+                df = pd.DataFrame([t.sql_row() for t in submitted])
+            df['item_name'] = df.apply(lambda r: r.item_name if isinstance(r, Item) else go.id_name[int(r.get('item_id'))], axis=1)
             df['datetime'] = df.apply(lambda r: ut.loc_unix_dt(r.get('timestamp')), axis=1)
             df['parse_time'] = df.apply(lambda r: ut.loc_unix_dt(r.get('update_ts')), axis=1)
             df = df.sort_values(by='transaction_id', ascending=True).drop_duplicates(
@@ -444,9 +482,10 @@ def submit_transaction_queue(queue_file: File = gp.f_exchange_log_queue, submit_
             df.to_pickle(dat_file)
             df.to_csv(csv_file, index=False)
     except PermissionError:
-        print(f'Failed to export the transactions to the csv file')
+        prt(f'Failed to export the transactions to the csv file')
     finally:
-        print(f"Added {len(submitted)}/{len(q)} new transactions to the transactions db")
+        if n_submissions > 0:
+            prt(f"Added {n_submissions}/{len(q)} new transactions to the transactions db")
 
 
 def to_int(v):
@@ -516,6 +555,10 @@ class ExchangeLogLine(Transaction):
         return cast_to.get(list_dtype)([cast_to.get(var_dtype)(self.__dict__.get(a))
                                         if self.__dict__.get(a) is not None else -1 for a in attribute_order])
     
+    def to_dict(self):
+        
+        return {k: self.__getattribute__(k) for k in self.columns}
+    
     def get_key(self, attribute_order: Iterable = renamed_immutable_attributes):
         """ Return a tuple that can be used as an identifier for this transaction as the offer updates over time. """
         return tuple([int(self.__dict__.get(a)) for a in attribute_order])
@@ -544,7 +587,7 @@ def update_transaction_ids(t_id: int, to_db_file: str = gp.f_db_local.replace('.
     """ Load all transactions with transaction_id > `t_id` and ensure that transaction_id is equal to the row index """
     
     # Safeguard in case of messing up
-    shutil.copy(gp.f_db_local, to_db_file)
+    shutil.copy(_db_path, to_db_file)
     con = sqlite3.connect(to_db_file)
     c = con.cursor()
     transactions = pd.read_sql(sql="SELECT * FROM 'transaction'", con=con)
@@ -573,21 +616,31 @@ def parse_logs_background():
     update_submitted_lines()
     
     
-def parse_logs():
+def parse_logs(post_exe_print: bool = True, t0: int or float = None):
+    global __t0__
+    if t0 is not None:
+        __t0__ = t0
     if not process_logs(add_current=True):
-        exit(1)
+        print("")
+        return False
     submit_transaction_queue(submit_data=True)
     update_submitted_lines()
-    print(f"\nExecution complete! Time taken: {1000 * (time.time() - t):.0f}ms\nPress ENTER to close this screen")
-    time.sleep(60)
+    print("")
+    if post_exe_print:
+        print(f"Execution complete! Time taken: {1000 * (time.time() - ct):.0f}ms\nPress ENTER to close this screen")
+        time.sleep(60)
     
 
 
 if __name__ == '__main__':
+    con = sqlite3.connect(gp.f_db_local)
+    print(con.execute("SELECT MAX(transaction_id) FROM 'transaction'").fetchone()+1)
+    exit(1)
+    
     # process_current_log(f_log, out_dir=dir_exchange_log)
     # submit_transaction_queue(submit_data=True)
     # exit(123)
     parse_logs_background()
     # submit_transaction_queue(submit_data=True)
     # update_submitted_lines()
-    input(f"Execution complete! Time taken: {1000 * (time.time() - t):.0f}ms\nPress ENTER to close this screen")
+    input(f"Execution complete! Time taken: {1000 * (time.time() - ct):.0f}ms\nPress ENTER to close this screen")

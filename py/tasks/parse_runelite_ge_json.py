@@ -10,12 +10,12 @@ from dataclasses import dataclass, field
 
 import pandas as pd
 
-from import_parent_folder import recursive_import
+from venv_auto_loader.active_venv import *
 from model.database import Database
 import global_variables.path as gp
 import global_variables.osrs as go
 import util.unix_time as ut
-del recursive_import
+__t0__ = time.perf_counter()
 
 to_submit = []
 j_ts = int(time.time())

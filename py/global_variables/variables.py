@@ -18,9 +18,9 @@ from collections import namedtuple
 
 import numpy as np
 
-from import_parent_folder import recursive_import
+from venv_auto_loader.active_venv import *
 from global_variables.data_classes import Avg5mDatapoint, RealtimeDatapoint, WikiDatapoint, Transaction, Item
-del recursive_import
+__t0__ = time.perf_counter()
 
 
 #######################################################################################################################
@@ -122,9 +122,8 @@ types = {
     'n_sales': _dtype_ui32,
     'n_bought': _dtype_ui64,
     'n_purchases': _dtype_ui32,
-    'tax': _dtype_ui64
-    
-    
+    'tax': _dtype_ui64,
+    'count_item': _dtype_bool
 }
 columns = list(types.keys())
 

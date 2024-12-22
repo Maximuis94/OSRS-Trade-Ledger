@@ -15,11 +15,11 @@ from collections import namedtuple
 from dataclasses import dataclass, field
 from typing import List, Tuple
 
-from import_parent_folder import recursive_import
+from venv_auto_loader.active_venv import *
 import global_variables.path as gp
 from global_variables.classes import SingletonMeta
 from model.database import Database
-del recursive_import
+__t0__ = time.perf_counter()
 
 # Timeseries database with data of all sources
 timeseries_database = Database(path=gp.f_db_timeseries, read_only=True)

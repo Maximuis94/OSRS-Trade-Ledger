@@ -5,11 +5,11 @@ Module with various implementations for preprocessing transferred data.
 import sqlite3
 from collections.abc import Iterable
 
-from import_parent_folder import recursive_import
+from venv_auto_loader.active_venv import *
 import global_variables.path as gp
 from model.data_source import SRC
 from model.database import Database, sql_create_timeseries_item_table
-del recursive_import
+__t0__ = time.perf_counter()
 
 
 def add_item_data(item_ids: int or Iterable, add_table: bool = False):

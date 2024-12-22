@@ -18,12 +18,12 @@ from collections.abc import Iterable
 
 import numpy as np
 
-from import_parent_folder import recursive_import
+from venv_auto_loader.active_venv import *
 import global_variables.configurations as gc
 import global_variables.osrs as go
 import global_variables.path as gp
 import util.kw_parser as kw_
-del recursive_import
+__t0__ = time.perf_counter()
 
 def np_ar_include_if_min_transactions(threshold: int = 150, **kwargs) -> bool:
     """ Include an item in array updates if it has `n` or more transactions """
@@ -141,7 +141,7 @@ def should_update(item_id: int, **kwargs) -> bool:
         return False
     
     i = go.itemdb.get(item_id)
-    ha = i.get('alch_value') - go.nature_rune_price
+    ha = i.get('alch_value') - min(go.nature_rune_price)
     if np_ar_include_alchables(item_id=item_id, alch_value=ha, con=gp.f_db_timeseries, buy_limit=i.get('buy_limit')):
         result = True
     # elif result and ha > 0 and i.get('buy_limit') < 150:
@@ -178,7 +178,7 @@ def get_npy_update_list(use_augment_tag: bool, update_db: bool = False):
         raise ValueError("List of items to include and exclude should be mutually exclusive...")
     
     if use_augment_tag:
-        include += [i for i in list(go.itemdb.keys()) if go.itemdb.get(i).get('augment_data')%2==1 and i not in exclude or go.itemdb.get(i).get('augment_data')%2==1 and go.itemdb.get(i).get('augment_data') > 1]
+        include += [i for i in list(go.itemdb.keys()) if go.itemdb.get(i).get('augment_data') % 2 == 1 and i not in exclude or go.itemdb.get(i).get('augment_data') % 2 == 1 and go.itemdb.get(i).get('augment_data') > 1]
     else:
         include += [i for i in list(go.itemdb.keys()) if i not in exclude and should_update(item_id=i)]
     

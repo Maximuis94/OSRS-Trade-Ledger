@@ -1,12 +1,12 @@
 import sqlite3
 import time
 
-from import_parent_folder import recursive_import
+from venv_auto_loader.active_venv import *
 import global_variables.path as gp
 import global_variables.osrs as go
 import util.unix_time as ut
 
-del recursive_import
+__t0__ = time.perf_counter()
 
 db = sqlite3.connect(database=f"{gp.dir_data}/avg5m_correction/avg5m_correction.db", uri=True)
 

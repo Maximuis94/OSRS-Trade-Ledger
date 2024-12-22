@@ -7,7 +7,7 @@ from overrides import override
 import util.gui as ug
 import util.str_formats as fmt
 from global_variables.classes import SingletonMeta
-from gui.model.button import GuiButton
+from gui.component.button import GuiButton
 from tasks.async_task import AsyncTask
 
 

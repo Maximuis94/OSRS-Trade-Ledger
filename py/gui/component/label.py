@@ -9,11 +9,11 @@ The listbox has a separate module.
 
 """
 import tkinter as tk
-from collections.abc import Iterable
+from collections.abc import Iterable, Sized
 from tkinter import ttk
 
-from gui.model.grid import TkGrid
-from gui.model.gui_widget import GuiWidget
+from gui.base.frame import GuiFrame
+from gui.base.widget import GuiWidget
 
 
 class GuiLabel(ttk.Label, GuiWidget):
@@ -21,8 +21,8 @@ class GuiLabel(ttk.Label, GuiWidget):
     Class for a label.
     
     """
-    def __init__(self, frame, grid: TkGrid, grid_tag: str, text: str = None, text_variable: tk.StringVar = None,
-                 event_bindings: Iterable = None, **kwargs):
+    def __init__(self, frame: GuiFrame, tag: str, text: str = None, text_variable: tk.StringVar = None,
+                 event_bindings: Sized and Iterable = None, **kwargs):
         """ Class for setting up tk label widget.
         A tk.Label built on top of the given frame with frequently used attributes, used to define tk elements in a
         standardized fashion. Commonly tweaked parameters can be passed as well. All parameters with the exception of
@@ -43,23 +43,12 @@ class GuiLabel(ttk.Label, GuiWidget):
         set_text(string)
             Method for changing the text displayed by the label
         """
-        self.text_variable = tk.StringVar(self.frame) if text_variable is None else text_variable
-        if text is not None:
-            self.text_variable.set(text)
         
-        super().__init__(textvariable=self.text_variable, **kwargs)
-        super(GuiWidget, self).__init__(frame, grid_tag, grid, event_bindings=event_bindings, **kwargs)
+        self.init_widget_start(frame, tag, text=text, text_variable=text_variable, **kwargs)
         
-    def set_text(self, text: str):
-        """ Display the given `text` string in this label """
-        if not isinstance(text, str):
-            text = str(text)
-        self.text_variable.set(text)
+        super().__init__(self.frame, textvariable=self._text)
+        self.init_widget_end(event_bindings=event_bindings, **kwargs)
     
-    def get_text(self) -> str:
-        """ Get the text displayed by this label """
-        return self.text_variable.get()
-
-
-if __name__ == "__main__":
-    ...
+    def update_label_text(self, text: str):
+        """ Update the text displayed by the label. """
+        self._text.set(text)

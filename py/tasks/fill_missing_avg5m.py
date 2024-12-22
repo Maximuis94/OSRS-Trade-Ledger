@@ -9,8 +9,7 @@ from collections.abc import Iterable
 
 
 
-from import_parent_folder import recursive_import
-recursive_import(1)
+from venv_auto_loader.active_venv import *
 import backend.download as dl
 import global_variables.osrs as go
 import global_variables.path as gp
@@ -21,7 +20,7 @@ import util.str_formats as fmt
 from file.file import File
 from model.data_source import SRC
 from model.database import Database
-del recursive_import
+__t0__ = time.perf_counter()
 
 
 
@@ -216,9 +215,13 @@ def fill_missing_avg5m(db_file: File = gp.f_db_timeseries, cooldown: float = 3.0
     
     upper_bound = db.execute(f"SELECT MAX(timestamp) FROM 'item{ref_id[0]:0>5}'", factory=0).fetchone()
     
+    import util.unix_time as ut
     # to_do = u_ar.unique_values(to_do, tuple, True)
     to_do = list(range(lb_ts, ub_ts+1, 300))
     to_do.sort()
+    to_do = [ut.loc_unix_dt(ts) for ts in to_do]
+    print(to_do[0], to_do[-1])
+    exit(-1)
     
     sell_keys, buy_keys = ['avgHighPrice', 'highPriceVolume'], ['avgLowPrice', 'lowPriceVolume']
     n_ts = len(to_do)
@@ -263,7 +266,7 @@ def fill_missing_avg5m(db_file: File = gp.f_db_timeseries, cooldown: float = 3.0
 
 if __name__ == '__main__':
     t1 = int(time.time())
-    fill_missing_avg5m(lb_ts=1719409800, ub_ts=t1-t1%14400)
+    fill_missing_avg5m(lb_ts=1729432800, ub_ts=1729468800)
     # fill_missing_avg5m(lb_ts=val.min_avg5m_ts_query_online)
     
     exit(1)

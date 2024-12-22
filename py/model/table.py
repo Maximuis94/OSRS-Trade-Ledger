@@ -19,14 +19,14 @@ from typing import Type, Tuple, Callable, Dict, List, Iterable
 
 import pandas as pd
 
-from import_parent_folder import recursive_import
+from venv_auto_loader.active_venv import *
 import util.data_structures as ud
 from file.file import File
 from global_variables import variables as var
 from global_variables.data_classes import *
 from sqlite.executable import insert_sql_dict
 from util.sql import get_db_contents
-del recursive_import
+__t0__ = time.perf_counter()
 
 
 #######################################################################################################################

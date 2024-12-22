@@ -7,6 +7,7 @@ Used as import backend.download as dl
 """
 import datetime
 import json
+import sqlite3
 import time
 import urllib.error
 import urllib.request
@@ -14,14 +15,14 @@ import urllib.request
 import requests
 from bs4 import BeautifulSoup
 
-from import_parent_folder import recursive_import
+from venv_auto_loader.active_venv import *
 import global_variables.configurations as cfg
-import global_variables.osrs as go
+# import global_variables.osrs as go
 import global_variables.path as gp
 import global_variables.values as val
 import util.str_formats as fmt
 import util.unix_time as ut
-del recursive_import
+__t0__ = time.perf_counter()
 
 _request_header = {
     'User-Agent': 'Homemade GE trading GUI/DB | Disc: Maximuis94'
@@ -178,7 +179,10 @@ def osrs_graph_official(item_id: int):
 
 
     """
-    item_name_url = go.id_name[item_id].replace(' ', '+').replace("'", '%27').replace("(", '%28').replace(")", '%29')
+    db = sqlite3.connect(f"file:{gp.f_db_local}?mode=ro", uri=True)
+    item_name = db.execute("SELECT item_name FROM item WHERE item_id=?", (item_id,)).fetchone()
+    db.close()
+    item_name_url = item_name.replace(' ', '+').replace("'", '%27').replace("(", '%28').replace(")", '%29')
     
     url = f"https://secure.runescape.com/m=itemdb_oldschool/{item_name_url}/viewitem?obj={item_id}"
     # exit(123)

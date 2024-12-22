@@ -16,7 +16,7 @@ import numpy as np
 import pandas as pd
 from overrides import override
 
-from import_parent_folder import recursive_import
+from venv_auto_loader.active_venv import *
 import global_variables.configurations as cfg
 import global_variables.osrs as go
 import global_variables.path as gp
@@ -31,7 +31,9 @@ from file.file import File
 from global_variables.data_classes import NpyDatapoint as NpyDp
 from model.data_source import DataSource, SRC
 from model.database import Database
-del recursive_import
+__t0__ = time.perf_counter()
+
+from util.logger import prt
 
 item = create_item(2)
 est_vol_per_char = 0
@@ -166,8 +168,8 @@ class NpyDbUpdater(Database):
                 self.update_listbox()
             
             tpc = time.perf_counter()
-            print(f'\n\tDone! Insert time: {fmt.delta_t(tpc-start_insert)} '
-                  f'Total runtime: {fmt.delta_t(tpc-self.t_start)}', end='\n\n')
+            prt(f'Done! Insert time: {fmt.delta_t(tpc-start_insert)} '
+                  f'Total runtime: {fmt.delta_t(tpc-self.t_start)}', n_indent=1, n_newline=1, end='\n\n')
         self.con = None
     
     def configure_default_timestamps(self):
@@ -593,12 +595,12 @@ class NpyDbUpdater(Database):
     def update_listbox(self):
         """ Update all prices listbox entries and save the result """
         t_listbox = time.perf_counter()
-        print(f'Updating Listbox. Processed 0/{self.n} items...      ', end='\r')
+        prt(f'Updating Listbox. Processed 0/{self.n} items...      ', end='\r')
         for idx, item_id in enumerate(self.item_ids):
-            print(f'Updating Listbox. Processed {idx+1}/{self.n} items...      ', end='\r')
+            prt(f'Updating Listbox. Processed {idx+1}/{self.n} items...      ', end='\r')
             self.update_prices_listbox_entry(item_id)
         self.prices_listbox_path.save(self.prices_listbox)
-        print(f'\nUpdated {self.n} listbox entries in {fmt.delta_t(time.perf_counter()-t_listbox)}')
+        prt(f'Updated {self.n} listbox entries in {fmt.delta_t(time.perf_counter()-t_listbox)}', n_newline=1)
     
     def update_prices_listbox_entry(self, item_id: int, n_rows: int = cfg.prices_listbox_days, n_intervals: int = 6):
         """
@@ -723,8 +725,8 @@ def clear_recent_rows(ts_threshold, item_ids, t0=time.perf_counter()):
 
     """
     db = Database(gp.f_db_npy, read_only=False)
-    
-    n_deleted = (db.execute("SELECT MAX(timestamp) FROM item00002").fetchone()[0]-ts_threshold)//300 * len(item_ids)
+    print(db.execute("SELECT MAX(timestamp) FROM item00002").fetchone())
+    n_deleted = (db.execute("SELECT MAX(timestamp) FROM item00002").fetchone()['MAX(timestamp)']-ts_threshold)//300 * len(item_ids)
     
     response = input(f"\tExecuting this method will result in deletion of approximately {n_deleted} rows across "
                      f"{len(item_ids)} different tables. Press Y to proceed: ")
@@ -783,8 +785,9 @@ def recompute_recent_rows(ts_threshold: int, item_ids: List[int] = go.npy_items)
 
 if __name__ == '__main__':
     # NpyDbUpdater(execute_update=True, add_arrays=False)
-    
-    s = recompute_recent_rows(ts_threshold=1727870400)
+    print(ut.loc_unix_dt(1729432800))
+    _ = input('')
+    s = recompute_recent_rows(ts_threshold=1729432800)
     # print(ut.utc_unix_dt(1726012500))
     
     exit(1)

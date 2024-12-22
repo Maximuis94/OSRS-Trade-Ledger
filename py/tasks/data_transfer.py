@@ -21,7 +21,7 @@ from typing import List, Tuple
 
 import pandas as pd
 
-from import_parent_folder import recursive_import
+from venv_auto_loader.active_venv import *
 import global_variables.configurations as cfg
 import global_variables.osrs as go
 import global_variables.path as gp
@@ -33,9 +33,10 @@ from controller.item import Item, augment_itemdb_entry
 from model.database import sql_create_timeseries_item_table, ROConn
 from model.timeseries import sql_timeseries_insert
 from sqlite.row_factories import factory_idx0, factory_dict
+from util.logger import prt
 from util.str_formats import delta_t
 
-del recursive_import
+__t0__ = time.perf_counter()
 
 _t_commit = int(time.perf_counter() + cfg.data_transfer_commit_frequency)
 _t_print = int(time.perf_counter() + cfg.data_transfer_print_frequency)
@@ -156,9 +157,8 @@ def transfer_rbpi_db_exports(dir_from: str = gp.dir_rbpi_exports, dir_to: str = 
     return connections, to_remove, item_ids if item_ids is not None else go.item_ids
 
 
-def timeseries_transfer_merged(path: str = gp.f_db_timeseries):
+def timeseries_transfer_merged(path: str = gp.f_db_timeseries, start_time: int or float = time.perf_counter()):
     """ Transfer exported rbpi batches, then extracted rows from rbpi sqlite dbs """
-    t0 = time.perf_counter()
     global small_batch_log
     timeseries_exe_start, size_ = time.perf_counter(), os.path.getsize(path)
     if 60 < time.time() % 86400 < 240:
@@ -182,7 +182,7 @@ def timeseries_transfer_merged(path: str = gp.f_db_timeseries):
     transfer_start = time.perf_counter()
     
     def print_current_file(cur: ROConn):
-        print(f'\t[{delta_t(time.perf_counter() - transfer_start)}] Current file: {cur.file}' + ' ' * 10, end='\r')
+        prt(f'Current file: {cur.file}' + ' ' * 10, end='\r')
         
     for idx, b in enumerate(copied_files):
         b_success, b_skipped = [0, 0, 0, 0, 0], [0, 0, 0, 0, 0]
@@ -191,8 +191,7 @@ def timeseries_transfer_merged(path: str = gp.f_db_timeseries):
         print_current_file(b)
         # for r in con_from.execute(f"""SELECT item_id, src, timestamp, price, volume FROM 'timeseries'
         #                        WHERE item_id NOT IN {go.timeseries_skip_ids} AND timestamp < ?""", max_ts).fetchall():
-        for r in b.con.execute(f"""SELECT item_id, src, timestamp, price, volume FROM 'timeseries'
-                                WHERE item_id NOT IN {go.timeseries_skip_ids}""").fetchall():
+        for r in b.con.execute(f"""SELECT item_id, src, timestamp, price, volume FROM 'timeseries' WHERE item_id NOT IN {go.timeseries_skip_ids}""").fetchall():
             src = r[1]
             sql_insert = sql_timeseries_insert(item_id=r[0], replace=False)
             try:
@@ -205,13 +204,13 @@ def timeseries_transfer_merged(path: str = gp.f_db_timeseries):
             except sqlite3.OperationalError as e:
                 if 'no such table: item' in str(e):
                     con_to.execute(sql_create_timeseries_item_table(item_id=r[0], check_exists=False))
-                    print(f"\t * Created table 'item{r[0]:0>5}'")
+                    prt(f" * Created table 'item{r[0]:0>5}'")
                     print_current_file(b)
                     con_to.execute(sql_insert, r[1:])
                 else:
                     raise e
         con_to.commit()
-        print(f'\t[{idx+1}] {b.file}: ins={b_success} / skip={b_skipped} | '
+        prt(f'[{idx+1}] {b.file}: ins={b_success} / skip={b_skipped} | '
               f'Total: insert={sum(b_success)} skip={sum(b_skipped)} sum={sum(b_skipped)+sum(b_success)}')
         b.con.close()
         
@@ -231,7 +230,7 @@ def timeseries_transfer_merged(path: str = gp.f_db_timeseries):
     print('\t************************************************************************************\n'
           f'\tTotal insertions: {success} | Total skips: {skipped}\n'
           f'\tDB size: +{fmt.fsize(os.path.getsize(path)-size_)} | '
-          f'Runtime: {fmt.delta_t(time.perf_counter()-t0)}\n')
+          f'Runtime: {fmt.delta_t(time.perf_counter()-start_time)}\n')
 
 
 def copy_batches():
@@ -356,10 +355,9 @@ def parse_item_data(path: str) -> dict:
     return items
     
 
-def insert_items():
+def insert_items(start_time: int or float = time.perf_counter()):
     """ Transfer all rows from idb to `db_path` """
-    t_ = time.perf_counter()
-    print(f' Updating item data...')
+    print(f' [{fmt.passed_pc(start_time)}] Updating item data...')
     import pickle
     count = 0
     db = sqlite3.connect(gp.f_db_local)
@@ -408,7 +406,7 @@ def insert_items():
     #         # idb.update_item(i)
     # idb.insert_rows(table_name=idb.table_name, rows=rows, replace=True)
     # idb.close()
-    print(f'\tUpdated item data in {fmt.delta_t(time.perf_counter()-t_)}\n\n')
+    print(f'\tUpdated item data in {fmt.delta_t(time.perf_counter()-start_time)}\n\n')
 
 
 def archive_rbpi_db_files(dir_src: str = gp.dir_temp, dir_dst: str = gp.dir_df_archive):

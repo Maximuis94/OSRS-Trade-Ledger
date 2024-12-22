@@ -4,9 +4,9 @@ This module contains various gui-related constants and configurations.
 """
 import datetime
 
-from import_parent_folder import recursive_import
+from venv_auto_loader.active_venv import *
 import util.str_formats as fmt
-del recursive_import
+__t0__ = time.perf_counter()
 
 # Width and height of the UI
 width = 10

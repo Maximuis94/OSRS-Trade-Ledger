@@ -13,7 +13,7 @@ from copy import copy, deepcopy
 import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib import patches as mpatches
-from import_parent_folder import recursive_import
+from venv_auto_loader.active_venv import *
 
 import str_formats
 import ts_util
@@ -25,7 +25,7 @@ from graph_util import xaxis_dow_format, major_format_percentage, xaxis_hod_form
 # import str_formats
 from str_formats import format_ts, format_n
 from ts_util import ts_to_dt, utc_ts_to_dt
-del recursive_import
+__t0__ = time.perf_counter()
 
 
 class Graph:

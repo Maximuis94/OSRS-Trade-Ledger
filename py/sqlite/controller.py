@@ -47,7 +47,7 @@ from typing import Any
 
 from overrides import override
 
-from import_parent_folder import recursive_import
+from venv_auto_loader.active_venv import *
 import global_variables.data_classes
 import global_variables.osrs as go
 import global_variables.path as gp
@@ -55,7 +55,7 @@ import sqlite.row_factories as factories
 from model.table import Column, Table
 from util.data_structures import *
 from util.sql import *
-del recursive_import
+__t0__ = time.perf_counter()
 
 class Database(sqlite3.Connection):
     """

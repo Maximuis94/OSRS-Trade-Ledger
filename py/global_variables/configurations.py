@@ -6,9 +6,9 @@ Values listed in this module are to be used as default parameter values in metho
 """
 from collections import namedtuple
 
-from import_parent_folder import recursive_import
+from venv_auto_loader.active_venv import *
 import global_variables.path as gp
-del recursive_import
+__t0__ = time.perf_counter()
 
 # If True
 debug = True

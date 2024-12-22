@@ -4,14 +4,14 @@ Executable py script for launching the GUI
 """
 import tkinter as tk
 
-from gui.gui import GUI
+from gui.main_gui import _GUI
 
 
 def start_db_gui():
     """ Launches the Graphical User Interface """
     print("Starting application...")
     root = tk.Tk()
-    gui = GUI(root)
+    gui = _GUI(root)
     window = gui.get_window()
     window.mainloop()
 

@@ -2,11 +2,11 @@
 This module contains the model of the inventory
 
 """
-from import_parent_folder import recursive_import
+from venv_auto_loader.active_venv import *
 from global_variables.importer import *
 from model.transaction import Transaction
 
-del recursive_import
+__t0__ = time.perf_counter()
 
 
 class Purchase(Transaction):

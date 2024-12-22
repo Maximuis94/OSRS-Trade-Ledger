@@ -13,9 +13,9 @@ import time
 from collections import namedtuple
 from collections.abc import Callable
 
-from import_parent_folder import recursive_import
+from venv_auto_loader.active_venv import *
 import global_variables.values as gv
-del recursive_import
+__t0__ = time.perf_counter()
 
 def del_chars(input_string, to_remove: str) -> str:
     """ Iterate over chars in `to_remove` and remove each char from `input_string` """

@@ -6,12 +6,12 @@ import os
 import time
 from collections.abc import Iterable
 
-from import_parent_folder import recursive_import
+from venv_auto_loader.active_venv import *
 import global_variables.classes as _cls
 from global_variables.importer import *
 from model.database import Database
 
-del recursive_import
+__t0__ = time.perf_counter()
 
 class DatabaseController(Database):
     """

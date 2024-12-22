@@ -61,7 +61,7 @@ from typing import List, Dict, Callable, NamedTuple, Tuple
 import pandas as pd
 from multipledispatch import dispatch
 
-from import_parent_folder import recursive_import
+from venv_auto_loader.active_venv import *
 import global_variables.configurations as cfg
 import global_variables.osrs as go
 import global_variables.path as gp
@@ -70,7 +70,7 @@ import util.str_formats as fmt
 from controller.item import create_item
 from global_variables.data_classes import TimeseriesRow, NpyDatapoint
 from model.database import Database
-del recursive_import
+__t0__ = time.perf_counter()
 
 queried_item_id = None
 queried_timestamp = None

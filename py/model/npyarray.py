@@ -10,7 +10,7 @@ from typing import Tuple, List
 
 import numpy as np
 
-from import_parent_folder import recursive_import
+from venv_auto_loader.active_venv import *
 import global_variables.configurations as cfg
 import global_variables.path as gp
 import global_variables.variables as var
@@ -19,7 +19,7 @@ from global_variables.data_classes import NpyArray as _NpyArray, NpyDatapoint, T
 from model.database import Database
 from model.item import Item
 from sqlite.row_factories import factory_npy_row
-del recursive_import
+__t0__ = time.perf_counter()
 
 ts_volume_sub = 86400*(cfg.n_days_volume_avg+1)
 

@@ -11,14 +11,15 @@ import os
 import sqlite3
 import time
 
-from import_parent_folder import recursive_import
+from venv_auto_loader.active_venv import *
 import global_variables.path as gp
 import util.str_formats as fmt
-from tasks.data_transfer import insert_items, timeseries_transfer_merged
 from model.database import ROConn
-del recursive_import
+__t0__ = time.perf_counter()
 
-import_start = time.perf_counter()
+from tasks.util import finish_execution
+
+from util.logger import prt
 
 
 def import_data(generate_arrays: bool = False, vacuum_threshold_mb: int = 3, vacuum_threshold_seconds: int = 90,
@@ -26,16 +27,20 @@ def import_data(generate_arrays: bool = False, vacuum_threshold_mb: int = 3, vac
     """ Import data from the Raspberry Pi and subsequently update npy arrays + prices listbox """
     _time = time.perf_counter()
     # timeseries_transfer()
-    insert_items()
-    timeseries_transfer_merged()
     
-
+    from tasks.parse_transactions import parse_logs
+    parse_logs(post_exe_print=False)
+    
+    from tasks.data_transfer import insert_items, timeseries_transfer_merged
+    insert_items(__t0__)
+    timeseries_transfer_merged(start_time=__t0__)
+    
     # Generate + VACUUM the npy db and compute listbox entries for GUI
     delta_size = gp.f_db_npy.fsize()
     delta_t = time.perf_counter()
     if multithreaded_npy_update:
         from backend.npy_db_updater_threaded import UpdaterThreadManager
-        UpdaterThreadManager()
+        UpdaterThreadManager(start_time=__t0__)
         delta_t = time.perf_counter()-delta_t
         delta_size = gp.f_db_npy.fsize() - delta_size
     else:
@@ -50,11 +55,9 @@ def import_data(generate_arrays: bool = False, vacuum_threshold_mb: int = 3, vac
     #     print('VACUUMing db...', end='\r')
     #     sqlite3.connect(gp.f_db_npy).execute("VACUUM")
     #     print(f'Db was vacuumed in {fmt.delta_t(time.perf_counter()-t_vacuum)}', end='\n\n')
-    print(f'Done! Total time taken: {fmt.delta_t(int(time.perf_counter()-import_start))} | This screen will close in 30s')
-    # _ = input('  Press ENTER to close')
-    print('')
-    time.sleep(10)
-
+    # prt(f"Done! This screen will close in 30s, alternatively, it can be kept open by pressing CTRL+C")
+    finish_execution()
+    
 
 if __name__ == '__main__':
     import_data(multithreaded_npy_update=True)

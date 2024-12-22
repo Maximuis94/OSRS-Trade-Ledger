@@ -51,7 +51,7 @@ from typing import Any
 
 from overrides import override
 
-from import_parent_folder import recursive_import
+from venv_auto_loader.active_venv import *
 import global_variables.data_classes as data_classes
 import sqlite.row_factories as factories
 # import util.verify as verify
@@ -59,7 +59,7 @@ from file.file import IFile
 from model.table import Column, Table
 from util.data_structures import *
 from util.sql import *
-del recursive_import
+__t0__ = time.perf_counter()
 
 
 def sql_create_timeseries_item_table(item_id: int, check_exists: bool = True) -> str:
