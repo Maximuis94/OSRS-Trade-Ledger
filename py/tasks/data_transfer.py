@@ -368,9 +368,9 @@ def insert_items(start_time: int or float = time.perf_counter()):
     c.row_factory = factory_dict
     # for item_row in pickle.load(open(gp.f_db_item, 'rb')).to_dict(
     #         'records'):
-    
+    sql = f"SELECT * FROM itemdb WHERE item_id IN ({', '.join([str(el) for el in new_items])})"
     # TODO: expand with data updates instead of just adding new items
-    for item_row in c.execute(f"SELECT * FROM itemdb WHERE item_id IN {new_items[1:-1]}"):
+    for item_row in c.execute(sql):
         
         item_row = {k: v for k, v in augment_itemdb_entry(Item(**item_row)).__dict__.items() if
                     k in Item.sqlite_columns()}

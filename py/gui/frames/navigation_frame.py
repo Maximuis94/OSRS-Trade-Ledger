@@ -7,24 +7,23 @@ The label indicates the current 'mode' the GUI is in
 
 """
 import os
-import sqlite3
+from collections.abc import Callable
 from tkinter.constants import RAISED
 
 import pandas as pd
 
 import global_variables.path as gp
 import global_variables.osrs as go
-from global_variables.variables import sqlite_check, types
+from global_variables.variables import types
 
 from gui.base.frame import GuiFrame
 from gui.component.button import GuiButton
 from gui.component.event_bindings import print_event, lmb
-from gui.component.listbox import GuiListboxFrame
-from gui.component._listbox.column import ListboxColumn
+from gui.component.listbox import GuiListbox
+from gui.frame.listbox import GuiListboxFrame
 import gui.component._listbox.column as listbox_column
-from gui.util.str_formats import strf_unix
+from gui.component.sort.sort import Sort
 from model.database import Database
-from util.str_formats import unix_, shorten_string
 
 
 class NavigationFrame(GuiFrame):
@@ -38,12 +37,13 @@ class NavigationFrame(GuiFrame):
     """
     df = pd.DataFrame
     
-    def __init__(self, window, button_width=15, grid_kwargs=None, **kwargs):
+    def __init__(self, window, button_width=15, grid_kwargs=None, button_callback: Callable = None, **kwargs):
         super().__init__(window, grid_layout=['A', '*', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J'], **kwargs)
         self.configure()
         # kw = {'frame': self, 'tk_grid': self.tk_grid, 'width': button_width,
         #       'font': ('Helvetica', '12'), 'sticky': 'WE'}
         # self.label = GuiLabel(grid_tag='A', text="OSRS Trading GUI", relief=SUNKEN, padding=(5, 5, 3, 2), **kw)
+        
         kw = {'frame': self, 'width': button_width, 'padxy': (5, 7), "top_label_text": "TOP LABEL TEXT", "bottom_label_text": "BOTTOM LABEL TEXT",
               'font': ('Helvetica', '12'), 'sticky': 'WE', 'relief': RAISED}
         
@@ -52,8 +52,12 @@ class NavigationFrame(GuiFrame):
         df = pd.read_pickle(os.path.join(gp.dir_data, "test_df.dat"))
         df['item_name'] = df['item_id'].apply(lambda item_id: go.id_name[item_id])
         del df['transaction_id'], df['item_id']
+        self.listbox = GuiListbox(self, tag='C', ipadxy=(20, 29), entry_width=80, entries=df.to_dict('records'),
+                                  columns=self.listbox_columns, initial_sort=Sort('item_name', False),
+                                  onclick_row=self.button_b)
         # print(self.listbox_columns)
-        self.listbox = GuiListboxFrame(tag='C', ipadxy=(20,29), entry_width=80, entries=df.to_dict('records'), columns=self.listbox_columns, initial_sort=[('item_name', False), ('timestamp', True)],**kw)
+        # self.listbox = GuiListboxFrame(tag='C', ipadxy=(20, 29), entry_width=80, entries=df.to_dict('records'),
+        #                                columns=self.listbox_columns, initial_sort=Sort('item_name', False), **kw)
         
         self.btn_b = GuiButton(tag='B', command=self.button_b, button_text="Button B", text="Button B", **kw)
         #
@@ -72,20 +76,19 @@ class NavigationFrame(GuiFrame):
         # self.btn_i = GuiButton(tag='I', command=self.button_i, button_text="", **kw)
         #
         # self.btn_j = GuiButton(tag='J', command=self.button_j, button_text="", **kw)
-        
-        if grid_kwargs is not None:
-            ...
-            # self.grid(**grid_kwargs)
+
         self.listbox.grid(row=0, column=0)
-        self.grid(row=0, column=0)
+        if grid_kwargs is not None:
+            self.grid(**grid_kwargs)
         # window.pack()
         
     def set_label_text(self, text: str):
         """ Alter the text in the top left label. Typically done to update the current mode that is displayed. """
         self.label.set_text(text)
         
-    def button_b(self, e=None):
-        print_event(e, keys=("__repr__",))
+    def button_b(self, e=None, **kwargs):
+        for k, v in kwargs.items():
+            print(k, v)
         
     def button_c(self, e=None):
         ...

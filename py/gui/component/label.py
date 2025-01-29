@@ -11,9 +11,11 @@ The listbox has a separate module.
 import tkinter as tk
 from collections.abc import Iterable, Sized
 from tkinter import ttk
+from typing import Optional
 
 from gui.base.frame import GuiFrame
 from gui.base.widget import GuiWidget
+from gui.util.str_formats import shorten_string
 
 
 class GuiLabel(ttk.Label, GuiWidget):
@@ -21,6 +23,8 @@ class GuiLabel(ttk.Label, GuiWidget):
     Class for a label.
     
     """
+    
+    
     def __init__(self, frame: GuiFrame, tag: str, text: str = None, text_variable: tk.StringVar = None,
                  event_bindings: Sized and Iterable = None, **kwargs):
         """ Class for setting up tk label widget.
@@ -43,12 +47,14 @@ class GuiLabel(ttk.Label, GuiWidget):
         set_text(string)
             Method for changing the text displayed by the label
         """
-        
         self.init_widget_start(frame, tag, text=text, text_variable=text_variable, **kwargs)
         
-        super().__init__(self.frame, textvariable=self._text)
+        super().__init__(self.frame._frame, textvariable=self._text, font=self.font.tk)
         self.init_widget_end(event_bindings=event_bindings, **kwargs)
     
     def update_label_text(self, text: str):
         """ Update the text displayed by the label. """
+        if self._MAX_LENGTH is not None and len(text) > self._MAX_LENGTH:
+            text = shorten_string(text, self._MAX_LENGTH)
+            
         self._text.set(text)

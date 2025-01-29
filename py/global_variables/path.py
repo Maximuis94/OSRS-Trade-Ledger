@@ -70,6 +70,7 @@ dir_logger = dir_output + 'log/'
 dir_npy_import = dir_data + 'npy_imports/'
 dir_item_production = dir_data + 'item_production/'
 dir_bank_memory = dir_data + 'bank_memory/'
+dir_runelite_ge_export = dir_data + 'runelite_ge_export/'
 
 dir_batch = dir_data + 'batches/'
 dir_batch_merged = dir_batch + 'merged/'
@@ -184,6 +185,8 @@ f_rbpi_rt_prices: File = File(dir_rbpi + 'temp/realtime.dat')
 
 f_runelite_exchange_log: File = File(dir_exchange_log_src + 'exchange.log')
 f_runelite_json_downloaded: File = File(dir_downloads + 'grand-exchange.json')
+f_runelite_ge_export_df_merged: File = File(dir_data + 'runelite-ge-export-dataframe.dat')
+f_runelite_ge_export_df_merged_csv: File = File(dir_output + 'runelite-ge-export-dataframe.csv')
 
 f_db_archive: File = File(dir_archive + 'archive.db')
 f_db_sandbox: File = File(dir_archive + 'test_database.db')

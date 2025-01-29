@@ -49,7 +49,7 @@ class GuiEntry(tk.Entry, GuiWidget):
         self._entry_text = tk.StringVar() if entry_variable is None else entry_variable
         self._entry_text.set(self._default_value if value is None else value)
         
-        super().__init__(sub_frame, textvariable=self._entry_text, **kwargs)
+        super().__init__(sub_frame, textvariable=self._entry_text, font=self.font.tk, **kwargs)
         self.init_widget_end(apply_grid=False, **kwargs)
         self.grid(**entry_position)
         sub_frame.grid(self.frame.get_grid_kwargs(self.tag, **kwargs))

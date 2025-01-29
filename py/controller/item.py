@@ -4,14 +4,17 @@ This module contains the model for an OSRS item
 """
 import pickle
 import sqlite3
+from collections import namedtuple
 from collections.abc import Iterable
-from typing import List, Tuple
+from typing import List, Tuple, overload
 
 import numpy as np
 
 from venv_auto_loader.active_venv import *
 from backend.download import realtime_prices
+from file.file import File
 from global_variables.importer import *
+from global_variables.variables import columns
 from model.data_source import SRC
 from model.database import Database
 from model.item import Item
@@ -258,15 +261,14 @@ def item_exists(item_id: int) -> bool:
 
 
 class ItemController(Database):
-    path = gp.f_db_local
+    table_name: str
     tuple = var.Item
     wiki = Database(path=gp.f_db_timeseries, read_only=True)
     
     def __init__(self, augment_items: bool = True, read_only: bool = False, **kwargs):
-        if kwargs.get('path') is not None:
-            self.path = kwargs.get('path')
-        self.table_name = 'item' if kwargs.get('table_name') is None else kwargs.get('table_name')
-        super().__init__(self.path, read_only=read_only, table_filter=self.table_name)
+        path = kwargs.pop('path', gp.f_db_local)
+        self.table_name = kwargs.pop('table_name', 'item')
+        super().__init__(File(path), read_only=read_only, tables=self.table_name, row_tuple=namedtuple("ItemTuple", Item.sqlite_columns()))
         self.table = self.tables.get(self.table_name)
         self.tables = {self.table_name: self.table}
         self.row_factory = self.augmented_item_factory if augment_items else self.item_factory
@@ -274,15 +276,26 @@ class ItemController(Database):
         self.add_cursor(key=self.tuple)
         self.augment_items = augment_items
         self.select_by_id = self.table.select + "WHERE item_id=:item_id"
+        self.select_by_name = self.table.select + "WHERE item_name=:item_name"
         
+    @overload
     def get_item(self, item_id: int, augment_items: bool = None) -> Item:
-        """ Fetch an Item with item_id=`item_id` from the sqlite database """
+        """Fetch an Item with item_id=`item_id` from the sqlite database"""
         
         self.set_item_factory(augment_items)
         try:
             return self.execute(self.select_by_id, {'item_id': item_id}).fetchone()
         except OSError as e:
             print(item_id, self.select_by_id)
+            raise e
+    
+    def get_item(self, item_name: str, augment_items: bool = None) -> Item:
+        """Fetch an Item with item_id=`item_id` from the sqlite database"""
+        self.set_item_factory(augment_items)
+        try:
+            return self.execute(self.select_by_name, {'item_name': item_name}).fetchone()
+        except OSError as e:
+            print(item_name, self.select_by_id)
             raise e
     
     def all_items(self, augment_items: bool = None) -> List[Item]:
@@ -391,12 +404,14 @@ class ItemController(Database):
         sql = f"UPDATE item SET rt_buy=?, rt_sell=?, rt_ts={int(time.time())} WHERE item_id=?"
         self.executemany(sql, [(min(rt_prices.get(i)), max(rt_prices.get(i)), i) for i in list(rt_prices.keys())])
         return True
-        
+    
+    def __getitem__(self, item: int | str) -> Item:
+        """Retrieve an Item from the database"""
+        return self.get_item(item)
+            
 
-# idb = ItemController()
-        
-        
 if __name__ == '__main__':
     idb = ItemController(path=gp.f_db_local)
-    # idb.update_realtime_prices()
+    idb["Mahogany logs"].print_item_info()
+    
     

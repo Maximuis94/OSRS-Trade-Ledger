@@ -35,7 +35,7 @@ import sqlite3
 from abc import ABC, abstractmethod
 from collections import namedtuple
 from collections.abc import Sequence
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, fields
 from datetime import datetime
 
 import numpy as np
@@ -407,6 +407,14 @@ class Item:
     def __ne__(self, other):
         return self.item_id != other.item_id
     
+    def print_item_info(self) -> str:
+        """Print all attributes of this Item"""
+        s = [f"Item {self.item_name} (id={self.item_id})"]
+        
+        for a in fields(self):
+            s.append(f"{a.name}: {a.type.__name__} = {getattr(self, a.name)}")
+        print("\n\t".join(s), end="\n\n")
+
 
 @dataclass(eq=False, match_args=True)
 class NpyArray:

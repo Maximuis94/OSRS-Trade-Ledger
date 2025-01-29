@@ -13,6 +13,6 @@ class GuiRadiobutton(tk.Radiobutton, GuiWidget):
 
     def __init__(self, variable: tk.Variable, value: any, **kwargs):
         self.init_widget_start(**kwargs)
-        super().__init__(self.frame, textvariable=self._text, variable=variable, value=value)
+        super().__init__(self.frame._frame, textvariable=self._text, variable=variable, value=value, font=self.font.tk)
         self.init_widget_end(**kwargs)
         

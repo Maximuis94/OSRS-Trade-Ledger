@@ -21,7 +21,7 @@ _lbc_make_args = ("column", "width", "format", "header", "button_click", "is_vis
 ITEM_ID = ListboxColumn.make("item_id", 6)
 """item_id ListboxColumn. Max width is 6, based on the highest item_id being ~30000"""
 
-ITEM_NAME = ListboxColumn.make("item_name", 30, lambda s: shorten_string(s, 30), "item_name", None, True, False, False)
+ITEM_NAME = ListboxColumn.make("item_name", 30, lambda s: shorten_string(s, 29), "item_name", None, True, False, False)
 """item_name ListboxColumn. Max width is 30, longer strings are shortened, by substituting middle chars with '.'"""
 
 PRICE = ListboxColumn.make("price", 9, lambda n: strf_number(n, 2, 9))
@@ -66,6 +66,9 @@ def get(key, key_var: str, command: Callable = None, header: str = None, column:
     Get a ListboxColumn derived from one of the Columns listed above, with slight-massive alterations, depending on
     input. `command` and `header` are listed as separate (kw)args as they are expected to be modified more
     frequently.
+    Usage example;
+    import gui.component._listbox.column as listbox_column
+    lbc = listbox_column.get(*args, **kwargs)
  
     Parameters
     ----------
@@ -92,16 +95,27 @@ def get(key, key_var: str, command: Callable = None, header: str = None, column:
     KeyError
         If no ListboxColumn is found, given `key` and `key_var`, raise a KeyError.
     """
-    if column is None:
-        for c in ListboxColumn.get_all():
-            if not isinstance(c, ListboxColumn):
-                print("There is a non-ListboxColumn found within LISTBOX_COLUMNS;")
-                for lbc in ListboxColumn.get_all():
-                    print(lbc)
-            if c.__getattribute__(key_var) == key:
-                column = c
-                break
     
+    if column is None:
+        
+            
+        try:
+            if isinstance(key, str):
+                key = ListboxColumn.__match_args__.index(key_var)
+            for c in ListboxColumn.get_all():
+                if c.__getattribute__(key_var) == key:
+                    column = c
+                    break
+        except AttributeError as e:
+            attributes = ListboxColumn.__match_args__
+            if key_var not in attributes:
+                print(key)
+                msg = f"ListboxColumn does not have attribute {key_var}. Its attributes are: {', '.join(attributes)}"
+                raise AttributeError(msg)
+            raise e
+        except ValueError as e:
+            for k, v in dict(locals()).items():
+                print(k, v)
     if column is None:
         e = f"No ListboxColumns were found for key={key} with value={key_var}"
         raise KeyError(e)

@@ -47,7 +47,7 @@ import sqlite3
 import warnings
 from collections import namedtuple
 from collections.abc import Container, Collection
-from typing import Any
+from typing import Any, Optional
 
 from overrides import override
 
@@ -57,6 +57,7 @@ import sqlite.row_factories as factories
 # import util.verify as verify
 from file.file import IFile
 from model.table import Column, Table
+from util import verify
 from util.data_structures import *
 from util.sql import *
 __t0__ = time.perf_counter()
@@ -85,7 +86,8 @@ def create_timeseries_db(db_file: str, item_ids: Iterable):
 class ROConn(IFile):
     """ Class of which the instances contain a read-only connection with the associated sqlite database """
     def __init__(self, path: str, allow_wcon: bool = False):
-        super().__init__(path)
+        self.file = File(path)
+        
         if not os.path.exists(path):
             raise FileNotFoundError(f"Unable to establish a connection with a non-existent file at path={path}")
         try:
@@ -113,20 +115,25 @@ class Database(sqlite3.Connection, IFile):
     The Database model class also contains some native sqlite methods for getting certain properties of the connected
     database, e.g. count_rows, get_min/get_max
     """
+    file: File
+    """The file of this Database"""
+    
     def __init__(self, path: str or File, tables: Table or Iterable = None, row_factory: Callable = dict_factory,
                  parse_tables: bool = None, read_only: bool = True, **kwargs):
         if isinstance(path, File):
-            path = path.path
+            self.file = path
+        else:
+            self.file = File(path)
+        
         # Open db in read-only mode
         try:
             self.database_arg = f"file:{path}?mode=ro" if read_only else path
             super().__init__(database=self.database_arg, uri=read_only)
         except sqlite3.OperationalError as e:
             if 'invalid uri authority' in str(e):
-                self.database_arg, read_only = path, False
-                super().__init__(database=path, uri=False)
-        super().__init__(path)
-        self.__dict__.update(File(path).__dict__)
+                self.database_arg, read_only = str(path), False
+                super().__init__(database=self.database_arg, uri=False)
+        # self.__dict__.update(File(path).__dict__)
         self.row_factory = row_factory
         self.tables, self.cursors = {}, {}
 
@@ -134,18 +141,22 @@ class Database(sqlite3.Connection, IFile):
         for key in (0, tuple, dict):
             self.add_cursor(key)
         
+        sqlite_schema_factory = factories.get_row_factory(var.SqliteSchema)
+        
         # Automatically extract tables and columns from the connected database
         self.sql_tables: List[var.SqliteSchema] = self.execute(
             "SELECT type, name, tbl_name, rootpage FROM sqlite_master WHERE type='table'",
-            factory=var.SqliteSchema).fetchall()
+            factory=sqlite_schema_factory).fetchall()
         self.sql_indices: List[var.SqliteSchema] = self.execute(
             "SELECT type, name, tbl_name, rootpage FROM sqlite_master WHERE type='index'",
-            factory=var.SqliteSchema).fetchall()
+            factory=sqlite_schema_factory).fetchall()
         
         if parse_tables is None or parse_tables:
             # print(self.db_path)
             self.extract_tables(parse_full=True)
         
+        if isinstance(tables, str):
+            tables = Table(tables, self.file, **kwargs)
         if isinstance(tables, Table):
             self.tables[tables.name] = tables
         elif isinstance(tables, dict):
@@ -158,7 +169,8 @@ class Database(sqlite3.Connection, IFile):
         self.aggregation_protocols = {}
         
     @override
-    def execute(self, *args, **kwargs) -> sqlite3.Cursor:
+    def execute(self, sql: str, params: Optional[Tuple[any, ...] | Dict[str, any]] = tuple([]), factory: any = None, read_only: bool = True,
+                row_factory: Optional[Callable[[sqlite3.Cursor, tuple], any]] = None, **kwargs) -> sqlite3.Cursor:
         """
         Execute a sql statement with the parameters provided. If `factory` is passed, execute it with a cursor that has
          the factory fetched by key `factory`. See Examples section for factory args added by default.
@@ -185,39 +197,29 @@ class Database(sqlite3.Connection, IFile):
 
         """
         try:
-            if kwargs.get('factory') is not None:
-                factory = kwargs.get('factory')
-                # print(factory)
-                del kwargs['factory']
-                try:
-                    return self.cursors.get(factory).execute(*args, **kwargs)
-                except AttributeError:
-                    c = self.cursor()
-                    c.row_factory = factories.get_row_factory(factory)
-                    self.cursors[factory] = c
-                    return c.execute(*args, **kwargs)
-            else:
-                return super().execute(*args, **kwargs)
+            c = kwargs.get("con", self.read_con if read_only else self.write_con)
+            if factory is not None or row_factory is not None:
+                c.row_factory = factories.get_row_factory(factory) if row_factory is None else row_factory
+            
+            return c.execute(sql, params)
         except sqlite3.OperationalError as e:
-            if 'no such table: item' in str(e) and isinstance(args[1], dict) and kwargs.get('recursive') is None:
-                create_timeseries_db(self.path, [args[1].get('item_id') if isinstance(args[1], dict) else args[1]])
+            if 'no such table: item' in str(e) and isinstance(params, dict) and kwargs.get('recursive') is None:
+                create_timeseries_db(self.path, [params.get('item_id') if isinstance(params, dict) else params])
                 kwargs['recursive'] = True
-                return self.execute(*args, **kwargs)
+                return self.execute(sql, params, factory, read_only, **kwargs)
             raise e
             
         # except WindowsError as e:
         except sqlite3.Error as e:
-            if len(args) == 0:
-                args = [kwargs.get(k) for k in ['sql', 'parameters']]
-                
-            print(f'Error while executing {args[0]} in db {self.path}')
-            if len(args) >= 2:
-                print('Parameters:', args[1])
+            print(f'Error while executing {sql} in db {self.path}')
+            if len(params) > 0:
+                print('Parameters:', params)
             else:
                 print('Parameters:', ())
             raise e
     
-    def con_exe_com(self, sql: str, parameters: Iterable = (), execute_many: bool = False):
+    def con_exe_com(self, sql: str, parameters: Optional[Tuple[any, ...] | Dict[str, any]] = tuple([]),
+                    execute_many: bool = False):
         """
         Establish a writeable connection, execute `sql` with parameters `parameters`, commit and close. Can be used to
         submit something to a Database that is loaded as read-only
@@ -232,7 +234,7 @@ class Database(sqlite3.Connection, IFile):
             If True, invoke sqlite3.Connection.execute_many() instead of *.execute()
 
         """
-        _con = self.write_con()
+        _con = self.write_con
         try:
             if execute_many:
                 _con.executemany(sql, parameters)
@@ -248,9 +250,15 @@ class Database(sqlite3.Connection, IFile):
         self.__init__(path=self.database_arg, tables=[t for _, t in self.tables.items()], row_factory=self.row_factory,
                       read_only=self.read_only)
     
+    @property
     def write_con(self) -> sqlite3.Connection:
         """ Return a sqlite3 connection to this database that can be used for writing operations """
         return sqlite3.connect(self.path)
+    
+    @property
+    def read_con(self) -> sqlite3.Connection:
+        """Read-only sqlite3 connection to the database"""
+        return sqlite3.connect(f"file:{self.path}?mode=ro", uri=True)
     
     def add_table(self, table: Table):
         """ Add Table `table` to this Database. An existing table with the same name will be overwritten. """
@@ -265,7 +273,6 @@ class Database(sqlite3.Connection, IFile):
         else:
             self.con_exe_com(sql_create)
         self.close()
-        super().__init__(self.path)
     
     def create_tables(self, tables: str or Table or Iterable = None, hush: bool = False, if_not_exists: bool = False,
                       sqls: Iterable[str] = None):
@@ -595,6 +602,11 @@ class Database(sqlite3.Connection, IFile):
     def fsize(self) -> int:
         """ Returns the file size in bytes of the db file """
         return os.path.getsize(self.path)
+    
+    @property
+    def path(self) -> str:
+        """Absolute path to the database file"""
+        return self.file.path
     
     
             

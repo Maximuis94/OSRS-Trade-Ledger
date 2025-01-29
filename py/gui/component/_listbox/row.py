@@ -1,56 +1,56 @@
 """
 Module with ListboxEntry class, which is a representation of a single row within a Listbox.
-
 """
-from collections.abc import Callable
+from dataclasses import dataclass
 from typing import Dict, Iterable, Tuple
 
-from dataclasses import dataclass
-
 import gui.component._listbox.column as listbox_column
-from gui.util.filter import Filter
+from gui.component.interface.row import IRow
+from gui.component.filter.filter import Filter
 
 
-@dataclass(slots=True, order=True)
-class ListboxEntry:
-    """ Class for a single Listbox Entry """
+@dataclass(slots=True, order=True, init=False, repr=False)
+class ListboxRow(IRow):
+    """
+    A single ListboxEntry. Its individual values can be accessed via ListboxEntry[ListboxColumn.column].
     
-    string: str
+    
+    """
+    _string: str
     """Default row format, equal to the key order of dict, while including all values"""
     
-    ids: Tuple[int, ...]
+    columns: Tuple[int, ...]
     """Tuple with the listbox column ids"""
     
-    values: Dict[str, any]
+    _values: Dict[str, any]
     """A dict with a column_id as key and the associated value of that column as entry"""
     
-    strings: Dict[int, str]
+    _strings: Dict[int, str]
     """A dict with column_id as key and the associated value of that column, formatted as a string as entry"""
     
     filters: int or None
     """A set of Filter instances applied to this entry"""
     
-    is_filtered: bool = False
+    is_filtered: bool
     """If True, one or more filters are applied, causing this entry to be hidden"""
     
     def __init__(self, values: Dict[int, any]):
-        self.ids = tuple(values.keys())
-        self.values, self.strings, string = {}, {}, []
+        self.columns = tuple(values.keys())
+        self._values, self._strings, string = {}, {}, []
         for i, value in values.items():
             lbc = listbox_column.get(i, "id")
-            self.values[lbc.column] = value
+            self._values[lbc.column] = value
             s = lbc.get_value(value)
-            # print(s)
-            self.strings[i] = s
+            self._strings[i] = s
             string.append(s)
-        self.string = " " + " ".join(string)
+        self._string = " " + " ".join(string)
         self.filters = None
+        self.is_filtered = False
     
-    def fmt(self, column_order: Iterable[int] = None) -> str:
-        """ Return the formatted row, ordered using `column_order` """
+    def strf(self, column_order: Iterable[int] = None) -> str:
         if column_order is None:
-            return self.string
-        return " ".join([self.strings[i] for i in column_order])
+            return self._string
+        return " ".join([self._strings[i] for i in column_order])
     
     def apply_filters(self, filters: Filter or Tuple[Filter] = None, hashed_filters: int = None) -> bool:
         """
@@ -58,7 +58,7 @@ class ListboxEntry:
 
         Parameters
         ----------
-        filters : Filter or Tuple[Filter], optional
+        filters : Filter or Iterable[Filter], optional
             0-N Filters to apply.
         hashed_filters : int, optional
             A hash value derived from `filters`. Used to prevent repetitive calls.
@@ -82,11 +82,12 @@ class ListboxEntry:
             self.is_filtered = False
             return False
         
+        # Filter was previously applied; return that outcome rather than re-applying filters.
         if self.filters is not None and self.filters == hashed_filters:
             return self.is_filtered
         
         self.is_filtered = False
-        for f in ([filters] if isinstance(filters, Filter) else filters):
+        for f in filters:
             if not f(self):
                 self.is_filtered = True
         self.filters = hashed_filters
@@ -95,12 +96,48 @@ class ListboxEntry:
     @staticmethod
     def generate(entry_values: dict):
         """ Returns a ListboxEntry, generated from `entry_values` """
-        return ListboxEntry(entry_values)
+        return ListboxRow(entry_values)
     
-    def __getitem__(self, item):
+    def __getitem__(self, item: str | int) -> any:
+        """
+        Get a specific value from the values this ListboxEntry holds. `item` can be a column attribute from the
+        ListboxColumn, or the `id` attribute. Recommended usage is via Listbox.column, however.
+        
+        Parameters
+        ----------
+        item : str | int
+            ListboxColumn.column attribute (str) or ListboxColumn.id (int)
+
+        Returns
+        -------
+        any
+            Will return the corresponding value, if it exists.
+        """
         try:
-            return self.values[item]
-        except KeyError as e:
-            print(f"KeyError in ListboxEntry.__getitem__ with key={item}")
-            raise e
+            # print(listbox_column.get("id" if isinstance(item, int) else item).column)
+            return self._values.get(item)#, self._values[listbox_column.get("id", item).column])
+        except KeyError:
+            msg = (f"KeyError in ListboxEntry.__getitem__ with key={item} of type={type(item)} "
+                   f"The following keys are valid; "
+                   f"{', '.join([str(c) for c in self.columns] + list(self._values.keys()))}")
+            raise KeyError(msg)
     
+    def __iter__(self):
+        """
+        Iterate over the values of the _values dictionary.
+
+        Yields
+        ------
+        Any
+            The values from the _values dictionary.
+        """
+        return iter(self._values.values())
+    
+    def __len__(self) -> int:
+        return len(self._values)
+    
+    def __repr__(self):
+        return self._string
+    
+    def __str__(self):
+        return self._string

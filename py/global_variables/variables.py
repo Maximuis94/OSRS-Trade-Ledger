@@ -123,7 +123,8 @@ types = {
     'n_bought': _dtype_ui64,
     'n_purchases': _dtype_ui32,
     'tax': _dtype_ui64,
-    'count_item': _dtype_bool
+    'count_item': _dtype_bool,
+    'account_name': _dtype_str
 }
 columns = list(types.keys())
 

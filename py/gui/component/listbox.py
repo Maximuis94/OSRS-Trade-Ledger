@@ -4,119 +4,80 @@ This module contains the implementation of the GuiListbox
 """
 import tkinter as tk
 import tkinter.ttk as ttk
-from collections.abc import Callable, Iterable
-from typing import List, Tuple
+from collections.abc import Callable, Sequence, Iterable
+from typing import List, Tuple, Optional
 
-import pandas as pd
-from multipledispatch import dispatch
-
-import gui.component._listbox
-from gui.component.button import GuiButton
-from gui.base.frame import TkGrid, GuiFrame
+from gui.base.frame import GuiFrame
+from gui.component._listbox.button_header import ButtonHeader
+from gui.component._listbox.entry_manager import ListboxEntries
+from gui.component._listbox.interfaces import SortLike
+from gui.component._listbox.row import ListboxRow
+from gui.component.interface.button_header import IButtonHeader
+from gui.component.interface.column import IListboxColumn
+from gui.component.interface.filter import IFilter, IFilterable
+from gui.component.interface.listbox import IListbox
+from gui.component.interface.row import IRow
+from gui.component.interface.sort import ISortSequence, ISortable
 from gui.component.label import GuiLabel
-from gui.component._listbox._column import ListboxColumn
-from gui.util.colors import Color, Rgba
-from gui.util.constants import letters
-from gui.util.filter import Filter
-from gui.component._listbox.entry import ListboxEntry
-from gui.util.font import Font, FontFamily
-from util.gui_formats import rgb_to_colorcode, format_listbox_row
-import gui.component._listbox.column as listbox_columns
+from gui.component.sort.sort import Sorts
+from gui.util.colors import Rgba
+from gui.util.decorators import DocstringInheritor
+from gui.util.generic import SupportsGetItem
 
 
-class ListboxEntries:
-    all: List[ListboxEntry]
-    """All ListboxEntries present in the underlying data structure"""
+_STYLE_ID = "style.GuiListbox"
+
+
+def _make_button_header(gui_listbox, tag: str):
+    if gui_listbox._button_header is not None:
+        gui_listbox._button_header.destroy()
     
-    subset: List[ListboxEntry]
-    """A filtered, sorted subset of ListboxEntries"""
-    filters: List[Filter]
-    sort_sequence: List[Tuple[int or str, bool] or int or str]
-    column_order: List[int]
-    last_sorted: List[Tuple[str, bool]] or None
-    font: Font = Font(9, FontFamily.CONSOLAS)
-    fill_listbox: Callable
-    
-    def __init__(self, entries: List[ListboxEntry], listbox_columns: List[ListboxColumn], insert_subset: Callable,
-                 initial_sort: Iterable[Tuple[str, bool]] = None, **kwargs):
-        if initial_sort is not None:
-            for sort_by, reverse_sort in initial_sort:
-                if sort_by in entries[0].values.keys():
-                    entries = self.sort(entries, sort_by, reverse_sort)
-        
-        self.all, self.subset = entries, []
-        self.listbox_columns = listbox_columns
-        self.filters = []
-        self.sort_sequence = []
-        self.column_order = []
-        self.last_sorted: Tuple[str, bool] or None = None
-        self.fill_listbox = insert_subset
-    
-    def header_button_sort(self, to_sort: str, **kwargs):
-        """Callback for Listbox header buttons"""
-        if self.last_sorted is not None and self.last_sorted[0] == to_sort:
-            to_sort = (to_sort, not self.last_sorted[1])
+    button_header = ButtonHeader(gui_listbox, tag, gui_listbox.header_button_sort, gui_listbox._columns)
+    return button_header
+
+
+def _remove_entry_slice(rows: Iterable[IRow], start: int = None, end: int = None):
+    """Remove the slice of entries determined using `start` and `end`"""
+    if start is None and end is None:
+        return []
+    else:
+        rows = list(rows)
+        if start is None:
+            return rows[end:]
+        elif end is None:
+            return rows[:start]
         else:
-            to_sort = (to_sort, True)
-        self.last_sorted = to_sort
-        return self.apply_configurations([to_sort], header_callback=True, **kwargs)
-        
-    def apply_configurations(self, sort_sequence: None or List[Tuple[str, bool]] = None, filters=None, column_order=None, header_callback: bool = False):
-        """Sequentially apply filters+sorting, then format individual rows"""
-        if filters is None:
-            subset = self.all
-        else:
-            self.filters = filters
-            subset = [e for e in self.all if not e.apply_filters(filters)]
-        
-        if sort_sequence is not None:
-            self.sort_sequence = sort_sequence
-            for next_sort in sort_sequence:
-                subset = self.sort(subset, *next_sort)
-            
-            if not header_callback:
-                self.last_sorted = None
-        else:
-            self.last_sorted = None
-        
-        self.subset = subset
-        self.fill_listbox()
-        
-    @property
-    def fetch(self, **kwargs) -> List[ListboxEntry]:
-        """fetch the filtered, sorted subset of formatted entries."""
-        if len(kwargs) > 0:
-            self.apply_configurations(*[kwargs.get(k) for k in ("sort_sequence", "filters", "column_order")])
-        return self.subset
+            return rows[:start] + rows[end:]
+
+
+@DocstringInheritor.inherit_docstrings
+class GuiListbox(GuiFrame, IListbox, ISortable, IFilterable):
+    """
+    Basic Listbox class that is primarily designed to provide a Listbox with minimal extras. That is, its complexity is
+    determined by an external controller class. It does not necessarily do much on its own.
+    """
     
-    def sort(self, entries: List[ListboxEntry], column: ListboxColumn or str or int, reverse_sort: bool = False) \
-            -> List[ListboxEntry]:
-        
-        if isinstance(column, int):
-            column = listbox_columns.get(column, 'id')
-        elif isinstance(column, str):
-            column = listbox_columns.get(column, 'column')
-        
-        if reverse_sort:
-            return list(reversed(sorted(entries, key=lambda e: e.values.get(column.column))))
-        else:
-            return sorted(entries, key=lambda e: e.values.get(column.column))
-
-
-class GuiListboxFrame(GuiFrame):
-    entries: ListboxEntries
-    columns: List[ListboxColumn]
-    button_header_row: int = -1
+    _columns: Tuple[IListboxColumn, ...]
+    _button_header: Optional[IButtonHeader] = None
+    _listbox: tk.Listbox
+    _scrollbar = ttk.Scrollbar
+    _bottom_label: GuiLabel
+    _entries: ListboxEntries
+    _bottom_label_text: Optional[tk.StringVar] = None
+    _active_filters: Optional[IFilter] = None
+    _active_sorts: Optional[ISortSequence] = None
+    _color_scheme: Callable[[IRow], Rgba] = None
+    _set_row_bgc: bool = True
+    _submitted_entries: List[IRow]
+    _onclick_row: Callable
+    _style: ttk.Style
     
-    def __init__(self, frame: GuiFrame, tag: str, entries: List[dict or tuple], entry_width=20, listbox_height=10, top_label_text='',
-                 sticky='N', header_button_callback=None, bottom_label_text='', padxy: Tuple[int, int] = (0, 0),
-                 event_bindings=None, select_mode=tk.SINGLE, font=('Monaco', 10), columns: List[ListboxColumn] = None,
-                 default_sort: tuple = (0, True), filter: callable = None, **kwargs):
+    def __init__(self, frame: GuiFrame, tag: str, entries: List[dict or tuple], entry_width=20, listbox_height=10,
+                 sticky='N', event_bindings=None, select_mode=tk.SINGLE, columns: Sequence[IListboxColumn] = None,
+                 onclick_row: Callable[[SupportsGetItem], any] = None, **kwargs):
+        """Basic Listbox class. It consists of a button header, a listbox, a scrollbar and a bottom label.
         
-        """ Class for setting up a listbox
-        With the most minimal input, the listbox consists of a scrollbar and a listbox with a label above and below it.
-
-
+        
         Parameters
         ----------
         frame : ttk.Frame
@@ -142,6 +103,9 @@ class GuiListboxFrame(GuiFrame):
             A tuple indicating the sorting method to use by default. The first element refers to the index of the
             ListboxColumn to use as sorting value, the second one is a flag indicating an ascending sorting order or not
 
+        onclick_row : Callable[[ListboxEntry], any], optional
+            A command to execute whenever a row is clicked. The clicked row will be passed as arg.
+
 
 
         Attributes
@@ -154,299 +118,191 @@ class GuiListboxFrame(GuiFrame):
         set_text(string)
             Method for changing the text displayed by the label
         """
-        self.button_panel_buttons = None
-        self.button_panel = None
         
         self.init_widget_start(frame=frame, tag=tag, **{k: v for k, v in kwargs.items() if k != 'text'})
-        self.n_entries = 0
-        self.row = 0
-        super().__init__(frame, ['A', "B", 'C'])
+        self._columns = tuple(columns)
+        width = entry_width + 1
         
-        self.columns = columns
-        if top_label_text is not None:
-            self.top_label = GuiLabel(self, text=top_label_text, padxy=padxy, sticky=sticky,
-                                      font=font, tag='A')
-            self.top_label.grid(row=self.row, column=0, columnspan=entry_width+1, sticky='WE')
-            self.row += 1
+        # self._style = ttk.Style()
+        # self._style.configure(_STYLE_ID, borderwidth=kwargs.pop('borderwidth', 5), relief=kwargs.pop('relief', "ridge"))
         
-        self.button_header_row = self.row
-        self.row += 1
-        self.scrollbar = ttk.Scrollbar(self, orient="vertical")
-        self.scrollbar.grid(row=self.row, column=entry_width, sticky="NS")
-        self.listbox = tk.Listbox(self, width=entry_width, height=listbox_height, selectmode=select_mode,
-                                  yscrollcommand=self.scrollbar.set, font=ListboxEntries.font.tk)
-        self.listbox.grid(row=self.row, column=0, columnspan=entry_width, sticky="NWE")
-        self.scrollbar.config(command=self.listbox.yview)
-        # self.button_panel = ttk.Frame(self, width=entry_width)
-        if bottom_label_text is not None:
-            self.bottom_label = GuiLabel(self, text=bottom_label_text, tag='C', padxy=(0, 0), sticky=sticky)
-            self.row += 1
-            self.bottom_label.grid(row=self.row, column=0, columnspan=entry_width+1, sticky='WE')
-            
+        super().__init__(frame, ["A"*entry_width+"*", "B"*entry_width+"C", "D"*width], relief="ridge")#, style=_STYLE_ID)
+        
         if isinstance(entries[0], dict):
-            # print(entries[0])
-            self.entries = ListboxEntries([ListboxEntry({c.id: entry[c.column] for c in columns}) for entry in entries],
-                                          listbox_columns=self.columns, insert_subset=self.fill_listbox, **kwargs)
+            self._entries = ListboxEntries(
+                [ListboxRow({c.id: entry[c.column] for c in self._columns}) for entry in entries],
+                listbox_columns=self._columns, insert_subset=self.fill_listbox, **kwargs)
         else:
-            self.entries = ListboxEntries([ListboxEntry(e) for e in entries], listbox_columns=columns,
-                                          insert_subset=self.fill_listbox, **kwargs)
-        self.entries.apply_configurations()
-        self.make_button_header()
+            self._entries = ListboxEntries([ListboxRow(e) for e in entries], listbox_columns=columns,
+                                           insert_subset=self.fill_listbox, **kwargs)
         
-        self.header, self.button_ids = "", {}
-        self.entry_chars, self.width_scaling, self.entry_width = None, None, entry_width
-        self.column_indices = {}
-        self.default_sort = default_sort
-        self.submitted_entries = []
+        self._make_button_header()
+        
+        self._scrollbar = ttk.Scrollbar(self.frame, orient="vertical")
+        self._scrollbar.grid(row=1, column=entry_width, sticky="NS")
+        
+        self._listbox = tk.Listbox(self.frame, width=entry_width, height=listbox_height, selectmode=select_mode,
+                                   yscrollcommand=self._scrollbar.set, font=self._entries.font.tk)
+        self._listbox.grid(row=1, column=0, columnspan=entry_width, sticky="NWE")
+        self._scrollbar.config(command=self._listbox.yview)
+        
+        self._bottom_label_text = tk.StringVar(self.frame)
+        self._bottom_label = GuiLabel(self, text_variable=self._bottom_label_text, tag='D', padxy=(0, 0), sticky=sticky)
+        self._bottom_label.grid(row=2, column=0, columnspan=width, sticky='WE')
+        
+        self._submitted_entries = []
         
         self.fill_listbox()
-        # self.bottom_frame = ttk.Frame(self, width=entry_width)
-        # self.setup_bottom_frame()
         
         if event_bindings is not None:
             for binding in event_bindings:
-                self.listbox.bind(binding[0], binding[1])
-        # super(GuiWidget, self).__init__(frame, tag, event_bindings=event_bindings)
-        # self.grid(**grid.get_dims(tag=grid_tag, sticky=sticky, padx=padxy[0], pady=padxy[1]))
-        self.last_sorted = "", True
+                self._listbox.bind(binding[0], binding[1])
+        self.row_click = onclick_row
     
-    def insert_entry(self, index, entry, bgc_rgb: Rgba = None):
-        """ Insert an (un)formatted entry into the listbox at the given index, coloring it with the given rgb tuple """
-        try:
-            if not isinstance(entry, str):
-                entry_str = " "
-                for formatted_value in [self.columns[i].get_value(entry.as_tuple()[i]) for i in
-                                        range(len(self.columns))]:
-                    entry_str += formatted_value
-                entry = entry_str
-            # if bgc_rgb is not None:
-            # print(index, 'rgb:', bgc_rgb)
-            self.listbox.insert(index, entry)
-            if bgc_rgb is not None:
-                self.set_entry_bgc(index, bgc_rgb)
-        except AttributeError as e:
-            print("Attribute error!")
-            print('\t', index)
-            print('\t', entry)
-            raise e
+    def insert(self, *rows: IRow, index: Optional[int] = None):
+        if index is None:
+            index = len(self._submitted_entries)
+        for idx, row in enumerate(rows):
+            try:
+                idx += index
+                r = str(row)
+                self._listbox.insert(idx, r)
+                self._submitted_entries.append(row)
+                if self._set_row_bgc:
+                    self._listbox.itemconfig(idx, bg=self.get_bgc(row))
+            except AttributeError as e:
+                print('Attribute Error', idx, row)
+                raise e
     
-    # Clear the listbox and fill it with entries from entries_list
-    def fill_listbox(self, columns: list = None, sort_by=None,
-                     color_format: Callable[[ListboxEntry], Rgba or Tuple[int, int, int] or Color] = None):
-        """
-        Fill the listbox with the entries. Format them as dictated by the columns and the color format, if applicable.
-        :param entry_list: List of rows (pd.Dataframe.to_dict('records')
-        :param columns: List of columns the listbox consists of
-        :param color_format: Method used to compute the background color of the row.
-        :return:
-        """
-        # self.entries.apply_configurations(
-        #     sort_sequence=self.sort_by if sort_by is None else sort_by,
-        #     filters=None,
-        #     column_order=self.columns if columns is None else columns
-        # )
-        self.clear_listbox()
-        for idx, e in enumerate(self.entries.subset):
-            row = e.fmt(columns)
-            # rgb = color_format(entry_list.index(row)) if color_format is not None else None
-            self.submitted_entries.append(row)
-            self.insert_entry(idx, entry=row, bgc_rgb=color_format(e) if color_format is not None else Color.WHITE)
-        return
-    
-    @dispatch(int, Rgba)
-    def set_entry_bgc(self, index: int, color: Rgba = None):
-        """Set the background color for the given index to the color represented by `color`"""
-        # print(colorcode)
-        if color is not None:
-            self.listbox.itemconfig(index, bg=color.hexadecimal)
-    
-    @dispatch(int, str)
-    def set_entry_bgc(self, index: int, color: str = None):
-        """Set the background color for the given index to the color represented by `color`"""
-        if color is not None:
-            self.listbox.itemconfig(index, bg=color)
-    
-    @dispatch(int, Color)
-    def set_entry_bgc(self, index: int, color: Color = None):
-        """Set the background color for the given index to the color represented by `color`"""
-        if color is not None:
-            self.listbox.itemconfig(index, bg=color.value.hexadecimal)
-    
-    @dispatch(int, tuple)
-    def set_entry_bgc(self, index: int, rgb: Tuple[int, int, int]):
-        """Set the background color for the given index to the color represented by `color`"""
-        self.listbox.itemconfig(index, bg=Rgba(*rgb).hexadecimal)
-    
-    # Delete an entry on a specific index OR delete a specific entry (and figure out the index
-    # If an entry and an index are given, the entry will be deleted and the index ignored
-    def delete_entry(self, index=-1, entry=''):
-        if entry != '':
-            current_index, index = 0, -1
-            entries = self.listbox.get(0, tk.END)
-            while current_index < len(entries) and index == -1:
-                next_entry = entries[current_index]
-                if next_entry == entry:
-                    index = current_index
-                else:
-                    current_index += 1
-        if index != -1:
-            self.listbox.select_clear(index)
-            self.n_entries -= 1
+    def add(self, rows: Iterable[IRow], extend: bool = True):
+        if extend:
+            self._entries.all = list(self._entries.all) + list(rows)
         else:
-            print("Unable to find entry {e} in the listbox...".format(e=entry))
+            self._entries.all = list(rows)
     
-    # Delete all entries in the listbox
-    def clear_listbox(self):
-        self.n_entries = 0
-        self.listbox.delete(0, tk.END)
-        self.submitted_entries = []
-    
-    # Set the text of the label above the listbox
-    def set_top_text(self, string, side: str = 'left', char_lim: int = -1):
-        char_lim = len(string) if char_lim == -1 else str(char_lim)
-        side = '<' if side == 'left' else '>' if side == 'right' else '^' if side == 'center' else ''
-        self.top_label.set_text(string + (int(char_lim) - len(string)) * ' ')
-    
-    # Set the text of the label below the listbox
-    def set_bottom_text(self, string):
-        self.bottom_label.set_text(string)
-    
-    # Return a list with all indices of selected entries in the listbox
-    def selected_indices(self):
-        return self.listbox.curselection()
-    
-    # Return a list with all indices of selected entries in the listbox
-    def get_selected_entries(self):
-        return (self.listbox.get(i) for i in self.selected_indices())
-    
-    def make_button_header(self, entry_spacing: int = 1, default_sort: tuple = None):
-        if isinstance(self.columns, dict):
-            self.columns = {c.column: listbox_columns.get(c) for c in list(self.columns.keys()) if self.columns.get(c).visible}
-        n = len(self.columns)
-        if False in [isinstance(self.columns, list)] + [isinstance(c, ListboxColumn) for c in self.columns]:
-            raise TypeError("Error initializing button header; columns should be a list of properly initialized "
-                            "ListboxColumns. ")
-        self.entry_chars = sum([c.width + entry_spacing for c in self.columns]) - entry_spacing
-        self.width_scaling = 1.15  # self.entry_width / self.entry_chars
-        self.entry_width = self.entry_chars
-        
-        # Reset button header
-        if self.button_panel_buttons is not None:
-            for b in self.button_panel_buttons:
-                if isinstance(b, GuiButton):
-                    b.destroy()
-            
-        x, w_sum, self.header, self.button_panel_buttons, self.button_ids = 0, 0, " ", [], {}
-        buttongrid, button_grid_ids, column_grid_ids = "", letters, {}
-        self.column_indices = {}
-        buttons, columns = [], []
-        for idx, c in enumerate(self.columns):
-            if not c.visible:
-                continue
-            # print(c.__dict__)
-            w = int(c.width / self.entry_chars * self.entry_width * self.width_scaling)
-            w_sum += w
-            self.header += f"{c.header: ^{c.width}} "
-            # b = GuiButton(self.button_panel, command=self.button_click, command_kwargs={"name": c.df_column}, #event_bindings=('<Button-1>', self.button_click),
-            #               text=c.header, width=w, sticky='WE', tag=letters[x])
-            buttons.append({
-                "command": self.entries.header_button_sort,
-                "command_kwargs": {"to_sort": c.column},
-                "button_text": c.header,
-                "width": w,
-                "sticky": "WE",
-                "tag": letters[x]
-            })
-            columns.append(c)
-            
-            buttongrid += letters[x] * w
-            column_grid_ids[c.header] = letters[x]
-            x += 1
-            self.column_indices[c.column] = self.columns.index(c)
-            if default_sort is None:
-                self.default_sort = c.column, True
-                default_sort = self.default_sort
-        
-        if self.button_panel is not None:
-            self.button_panel.destroy()
-        if self.button_header_row == -1:
-            self.button_header_row = self.row
-            self.row += 1
-        self.button_panel = GuiFrame(self, TkGrid([buttongrid]))
-        self.button_panel_buttons = []
-        
-        for column, button_kwargs in zip(columns, buttons):
-            b = GuiButton(self.button_panel, **button_kwargs)
-            key = str(b.info).split('!')[-1].replace('>', '')
-            self.button_ids[key] = column.column
-        self.button_panel.grid(row=self.button_header_row, column=0, sticky='NW')
-        # time.sleep(5)
-        
-        # Set default sort for this button panel. default_sort should be a tuple (column, bool(reverse))
-        # The first value can be its index in the list of columns or the df_column value.
-        
-        # print(self.default_sort)
-    
-    def header_button_default(self, e=None):
-        # self.header_button_callback(e)
-        # return
-        header_id = self.button_ids.get(f"{str(e.__dict__.get('widget')).split('!')[-1]}")
-        sort_by = self.sort_by
-        self.sort_by = header_id
-        self.sort_reverse = False if self.sort_by != sort_by else not self.sort_reverse
-        self.df = self.df.sort_values(by=[sort_by], ascending=[self.sort_reverse])
-        self.fill_listbox(self.df.to_dict('records'), columns=self.columns)
-    
-    def button_click(self, e=None, column_name: str = None):
-        # print(self.button_ids.get(f"{str(e.__dict__.get('widget')).split('!')[-1]}"))
-        # self.header_button_default(e)
-        if column_name is not None:
-            if self.last_sorted[0] == column_name:
-                self.last_sorted = column_name, not self.last_sorted[1]
+    def fill_listbox(self, rows: Iterable[IRow] = None, filters: Optional[IFilter] = None, extend: bool = True,
+                     sorts: Optional[Sorts] = None, is_header_button_callback: bool = False):
+        if not extend:
+            self.clear_listbox()
+        if rows is not None:
+            if not extend:
+                self._entries.all = rows
             else:
-                self.last_sorted = column_name, True
-        self.entries.apply_configurations()
-        # self.header_button_callback(self.button_ids.get(f"{str(e.__dict__.get('widget')).split('!')[-1]}"))
-    
-    def update_sort(self, var, reverse):
-        if isinstance(var, int):
-            self.sort_by, self.sort_reverse = [self.columns[var].df_column], [reverse]
-        elif isinstance(var, str):
-            self.sort_by, self.sort_reverse = [var], [reverse]
-        elif isinstance(var, list):
-            self.sort_by, self.sort_reverse = var, reverse
-        if self.df is not None:
-            self.df = self.df.sort_values(by=var, ascending=reverse)
-            self.fill_listbox(self.df.to_dict('records'), columns=self.columns)
-            return self.df.to_dict('records')
-    
-    # Code that will be executed when the user clicks on an entry in the listbox
-    @staticmethod
-    def clicked_entry(event):
-        w = event.widget
-        idx = int(w.curselection()[0])
-    
-    @property
-    def active_filters(self) -> None or Filter or List[Filter]:
-        """Return the list of Filters that are currently active"""
-        ...
-    
-    @property
-    def sort_by(self) -> None or str or Tuple[str, bool] or List[Tuple[str, bool]]:
-        """Return the sorting sequence that is to be applied"""
-        ...
-    
-    def add_column(self, column: str, command: Callable = None, **kwargs):
-        kwargs['command'] = self.entries.header_button_sort
-        self.columns.append(ListboxColumn.make(**kwargs))
-    
-    
+                self._entries.all += list(rows)
         
-#
-# if __name__ == '__main__':
-#     import global_variables.path as gp
-#     db = Database(gp.f_db_local)
-#     rows = db.execute("""SELECT * FROM "transaction" WHERE item_id < 100""", factory=dict).fetchall()
-#     df = pd.DataFrame(rows)
-#     df.to_pickle(os.path.join(gp.dir_data, "test_df.dat"))
+        rows = self._entries.apply_configurations(sort_by=self._active_sorts if sorts is None else sorts,
+                                                  filters=self._active_filters if filters is None else filters,
+                                                  header_callback=is_header_button_callback)
+        
+        for r in rows:
+            self.insert(r)
     
+    def refresh_listbox(self):
+        self.clear_listbox()
+        
+        for row in self._entries.apply_configurations():
+            self.insert(row)
+            
+    def clear_listbox(self, start: Optional[int] = None, end: Optional[int] = None):
+        """CLear the listbox. By default, it removes all entries. Alternatively, start and end row index can be given"""
+        self._listbox.delete(0 if start is None else start, tk.END if end is None else end)
+        self._entries.subset = _remove_entry_slice(self._entries.subset, start, end)
+    
+    def get_bgc(self, entry: IRow) -> Optional[str]:
+        if self._color_scheme is None:
+            return None
+        return self.color_scheme(entry).hexadecimal
+    
+    @property
+    def row_click(self) -> Callable[[IRow], ...]:
+        """The action that is executed whenever a row is clicked."""
+        return self._row_click
+    
+    @row_click.setter
+    def row_click(self, onclick_row: Callable[[IRow], ...]):
+        self._listbox.unbind("<<ListboxSelect>>")
+        self._onclick_row = onclick_row
+        self._listbox.bind("<<ListboxSelect>>", self._row_click)
+    
+    @property
+    def frame(self) -> ttk.Frame:
+        """The ttk.Frame that holds the widgets of this class"""
+        return self._frame
+    
+    @property
+    def color_scheme(self):
+        """The color scheme that is applied to ListboxEntries"""
+        return self._color_scheme
+    
+    @color_scheme.setter
+    def color_scheme(self, color_scheme: Callable[[IRow], Rgba]):
+        self._color_scheme = color_scheme
+    
+    @property
+    def bottom_label(self) -> str:
+        """Value of the tk.StringVar of the label at the bottom of the listbox"""
+        return self._bottom_label_text.get()
+    
+    @bottom_label.setter
+    def bottom_label(self, string):
+        self._bottom_label_text.set(string)
+    
+    @property
+    def index(self) -> int:
+        """Index of the currently selected row"""
+        idx = self._listbox.curselection()[0]
+        return idx if isinstance(idx, int) else idx[0]
+
+    def header_button_sort(self, sort: Sorts):
+        """Apply the sort(s) in `sort` and fill the Listbox sorted as such"""
+        self.fill_listbox(sorts=sort, is_header_button_callback=True, extend=False)
+    
+    def _make_button_header(self):
+        """Create the button header. Each visible column is assigned a button"""
+        self._button_header = _make_button_header(self, "A")
+    
+    def _row_click(self, event):
+        """Executes whenever a row within the listbox is clicked. """
+        if self._onclick_row is not None:
+            idx = self.index
+            entry = self._entries.subset[idx]
+            self._onclick_row(**{"index": idx, "entry": entry, "event": event})
+    
+    @property
+    def default_sort(self) -> Sorts:
+        """The sorting sequence that is applied by default"""
+        return self._entries.default_sort_sequence
+    
+    @default_sort.setter
+    def default_sort(self, sort_by: Optional[SortLike] = None):
+        self._entries.initial_sort(sort_by)
+    
+    @property
+    def n_entries(self) -> int:
+        """Return the amount of entries in this Listbox"""
+        return len(self._entries)
+    
+    def sort(self, sort_by: ISortSequence) -> Tuple[IRow, ...]:
+        return self._entries.sort(sort_by)
+    
+    def filter(self, *filters: IFilter) -> Tuple[IRow, ...]:
+        return self._entries.filter(filters)
+    
+    def __getitem__(self, index: int) -> IRow:
+        return self._submitted_entries[index]
+    
+    def __len__(self) -> int:
+        return len(self._entries)
+
+
+if __name__ == '__main__':
+    row = list(range(20))
+    print(row)
+    row = _remove_entry_slice(row, 5, 15)
+    print(row)
+    
+    # import global_variables.path as gp
+    # db = Database(gp.f_db_local)
+    # rows = db.execute("""SELECT * FROM "transaction" WHERE item_id < 100""", factory=dict).fetchall()
+    # df = pd.DataFrame(rows)
+    # df.to_pickle(os.path.join(gp.dir_data, "test_df.dat"))

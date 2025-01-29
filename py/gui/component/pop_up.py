@@ -121,3 +121,7 @@ class TestPopUp(tk.Toplevel):
         if self.on_close_callback is not None:
             self.on_close_callback(self.data)
         super().destroy()
+
+
+if __name__ == "__main__":
+    TestPopUp()

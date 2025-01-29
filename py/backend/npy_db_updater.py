@@ -228,7 +228,7 @@ class NpyDbUpdater(Database):
             t0 = self.t0
         if t1 is None:
             t1 = self.t1
-        self.con = self.write_con()
+        self.con = self.write_con
         exe_times_item = []
         n_items, n_rows, n_deleted, n_created, n_skipped = len(item_ids), 0, 0, 0, 0
         for idx, item_id in enumerate(item_ids):

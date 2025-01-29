@@ -22,7 +22,7 @@ import backend.npy_db_updater as npy_db
 from file.file import File
 from global_variables.osrs import npy_items
 from global_variables.values import empty_tuple
-from model.database import Database
+from my_util import *
 from model.timeseries import TimeseriesDB
 
 empty_db: File = gp.f_db_npy
@@ -99,26 +99,29 @@ def create_npy_db_threaded(n_threads: int = 4, reset_db: bool = False):
 
 import util.str_formats as fmt
 
+
 def test_db_small(db, sql, params):
-    db = Database(db)
+    db = Database(db, parse_tables=False)
     _t0 = time.perf_counter()
+    db.connect()
     n_rows = len(db.execute(sql, params).fetchall())
     
     print(f"Query time for {n_rows} rows from one table: {int(1000*(time.perf_counter()-_t0))}ms", end='\n\n')
 
-# if __name__ == '__main__':
-#     select = """SELECT * FROM item00002"""# WHERE timestamp > ?"""
-#     values = int(time.time())
-#     values = (values-values%86400-86400*13,)
-#
-#     for f in (gp.f_db_npy, File(gp.dir_data + 'npy_.db')):
-#         print(f"File size of db {f.file}: {fmt.fsize(f.fsize())}")
-#         test_db_small(f, select, empty_tuple)
 if __name__ == '__main__':
-    import util.file as uf
-    pd.DataFrame(gp.f_prices_listbox.load().get(2)).to_csv(gp.dir_output+'listbox.csv')
-    print(gp.f_prices_listbox.load().get(2))
-    # create_npy_db_threaded(n_threads=threads)
-    # from backend.npy_db_updater_threaded import exe
-    # exe()
+    select = """SELECT * FROM item00002"""# WHERE timestamp > ?"""
+    values = int(time.time())
+    values = (values-values%86400-86400*13,)
+
+    for f in (gp.f_db_npy,):  # File(gp.dir_data + 'npy_.db')):
+        print(f"File size of db {f.file}: {fmt.fsize(f.fsize())}")
+        test_db_small(f, select, empty_tuple)
+
+# if __name__ == '__main__':
+#     import util.file as uf
+#     pd.DataFrame(gp.f_prices_listbox.load().get(2)).to_csv(gp.dir_output+'listbox.csv')
+#     print(gp.f_prices_listbox.load().get(2))
+#     # create_npy_db_threaded(n_threads=threads)
+#     # from backend.npy_db_updater_threaded import exe
+#     # exe()
     

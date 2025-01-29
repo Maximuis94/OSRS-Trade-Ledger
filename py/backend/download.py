@@ -7,6 +7,7 @@ Used as import backend.download as dl
 """
 import datetime
 import json
+import os
 import sqlite3
 import time
 import urllib.error
@@ -45,7 +46,7 @@ def realtime_prices(check_rbpi: bool = False, force_rbpi: bool = False) -> dict:
     Returns
     -------
     dict
-        Realtime prices dict, with item_id as key and low, high prices as keys
+        Realtime prices dict, with item_id as key and low, high prices as entries
     
     Raises
     ------

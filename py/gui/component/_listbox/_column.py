@@ -1,19 +1,19 @@
 """"""
-from copy import deepcopy
 from dataclasses import dataclass
-from enum import Enum
-from typing import Callable, Type, Any, List
+from typing import Callable, Type, Any
 
-from gui.util.str_formats import strf_number, strf_unix
-from util.str_formats import shorten_string
+from gui.component.interface.column import IListboxColumn
 
 LISTBOX_COLUMNS: list = []
 
-@dataclass(frozen=True, slots=True, match_args=True)
-class ListboxColumn:
+
+@dataclass(frozen=True, slots=True, match_args=True, kw_only=True)
+class ListboxColumn(IListboxColumn):
     """
     Represents a column in a tkinter Listbox with formatting, sorting, and filtering functionality.
     """
+    id: int
+    """A unique identifier assigned to this ListboxColumn"""
     
     column: str
     """The identifier of the associated pandas DataFrame column."""
@@ -30,20 +30,21 @@ class ListboxColumn:
     button_click: Callable
     """A callable to handle button click events associated with the column."""
     
-    header: str = None
+    header: str
     """The display name of the column header."""
     
-    df_dtype: str = None
+    df_dtype: str
     """The data type in the DataFrame or data source, expressed as a string."""
     
-    visible: bool = True
+    visible: bool
     """Determines whether the column is visible in the Listbox."""
     
-    push_left: bool = True
+    push_left: bool
     """Determines the alignment of the column; True for left, False for right."""
     
-    id: int = None
-    """A unique identifier assigned to this ListboxColumn"""
+    @property
+    def is_visible(self) -> bool:
+        return self.visible
     
     @staticmethod
     def make(column: str, width: int, format: Callable[[Any], str] = lambda s: str(s), header: str = None,
@@ -70,9 +71,6 @@ class ListboxColumn:
             Indicates whether the column contains numerical values, by default `True`.
         push_left : bool, optional
             Determines the alignment of the column; True for left, False for right, by default `True`.
-        id : int
-            A unique identifier assigned to this ListboxColumn; incremental and based on the size of the LISTBOX_COLUMNS
-            tuple.
 
         Returns
         -------
@@ -118,11 +116,7 @@ class ListboxColumn:
         """
         try:
             # print(x)
-            f = (
-                f"{self.format(x): {'<' if self.push_left else '>'}{self.width - 1}} "
-                if self.visible
-                else ""
-            )
+            f = f"{self.format(x): {'<' if self.push_left else '>'}{self.width - 1}} " if self.visible else ""
             if len(f) > self.width and print_warning:
                 print(
                     f"Formatted value for column {self.header} value={f} exceeded configured "

@@ -49,9 +49,11 @@ def strf_number(n: (int or float), max_decimals: int = 3, max_length: int = 8) -
     n = n / m.multiplier
     try:
         try:
-            n_d = min(max_decimals, max(0, max_length - len(f"{int(n)}") - 2))
+            n_d = min(max_decimals, max_length - len(str(int(n))) - 3)
         except TypeError:
             n_d = 1
+        if n_d < 0 and abs(n) > 1:
+            return str(int(round(n, 0))) + m.abbreviation
         if -.05 < n - int(n) < .05:
             return f"{int(n)}{m.abbreviation}"
         return f'{n:.{n_d}f}{m.abbreviation}'
@@ -80,6 +82,6 @@ def shorten_string(string: str, max_length: int = 20):
     if len(string) <= max_length:
         return string
     else:
-        n = max_length // 2
-        return f"{string[:n - 1]}{'.' * (max_length - 2 * n + 2)}{string[-n + 1:]}"
+        n = (max_length - 1) // 2
+        return f"{string[:n - 1]}...{string[-n + 1:]}"
     

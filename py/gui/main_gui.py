@@ -5,11 +5,13 @@ from concurrent import futures
 from datetime import datetime
 from tkinter import ttk
 
+from gui.component._listbox.button_header import ButtonHeader
 from gui.frames.navigation_frame import NavigationFrame
 from gui.component.button import GuiButton
 from gui.base.frame import TkGrid, GuiFrame
 from gui.component.event_bindings import EventBinding, lmb
 from gui.component.label import GuiLabel
+from gui.util.constants import letters
 from util.gui_formats import rgb_to_colorcode
 # from tab_inventory import InventoryFrame
 
@@ -23,6 +25,9 @@ simulating = False
 Parent GUI window code, in here the outer window + tabs are defined. The specific implementation of each tab can be
 found in its respective class.
 """
+
+
+_BUTTON_WIDTH: int = 30
 
 
 def do_this(var_a: int, var_b: int) -> bool:
@@ -67,7 +72,14 @@ class GraphicalUserInterface(tk.Frame):
     window_name: str = ''
     window_width: int = 800
     window_height: int = 600
-    tk_grid: TkGrid = TkGrid(['AAAAAAAAAA', 'AABBBBBBBB', 'AACCCCCCCC', 'AADDDDDDDD', 'AAEEEEEEEE'])
+    tk_grid: TkGrid = TkGrid(['AABBBBBBBBBCCCCC',
+                              'AABBBBBBBBBCCCCC',
+                              'AABBBBBBBBBCCCCC',
+                              'AABBBBBBBBBCCCCC',
+                              'AABBBBBBBBBCCCCC'])
+    
+    button_column: GuiFrame
+    navigation_frame: NavigationFrame
     
     def __init__(self, window: tk.Tk, name: str, width: int = 800, height: int = 600, **kwargs):
         super().__init__(**kwargs)
@@ -77,15 +89,46 @@ class GraphicalUserInterface(tk.Frame):
         self.window = window
         self.window.geometry(f'{self.window_width}x{self.window_height}')
         
-        self.navigation_frame = NavigationFrame(window, grid_kwargs=self.tk_grid.get_dims('A', 10, 10, sticky='NW'))
+        self.frame = GuiFrame(self.window, self.tk_grid)
         
+        self.buttons = []
+        self.generate_button_column(5)
+        self.navigation_frame = NavigationFrame(self.frame, grid_kwargs=self.frame.get_grid_kwargs("B"))
         # self.grid(**self.tk_grid.get_dims(self.grid_tag, pady=self.pady, padx=self.padx, sticky=self.sticky))
-        self.grid(column=0, row=0, sticky="NW", padx=10, pady=10)
+        self.frame.grid(column=0, row=0, sticky="NW", padx=10, pady=10)
 
     def get_window(self):
         return self.window
+    
+    def button_column_callback(self, *args, **kwargs):
+        """Callback for the button column. Has a variety of responses, depending on which button is pushed."""
+    
+    def generate_button_column(self, n_buttons: int):
+        """Generate a GuiFrame with a set of buttons for navigating through the application"""
+        self.button_column = GuiFrame(self.frame, TkGrid([c for c in letters[:n_buttons]]), tag="A")
+        common_kwargs = {"frame": self.button_column, "command": self.button_column_press, "width": 30}
+        kws = [
+            {"tag": tag, "button_text": text, "command_kwargs": {"method_id": text}} for tag, text in
+            zip(letters, ["Inventory", "Results/day", "Item prices", "Overall results", "Import data"])
+        ]
+        self.buttons = [GuiButton(**{**kw, **common_kwargs}) for kw in kws]
+        self.button_column.grid(**self.frame.get_grid_kwargs(self.button_column.tag))
+    
+    def button_column_press(self, **kwargs):
+        """Callback for when a button from the column is pressed."""
+        method_id = kwargs.pop('method_id').lower()
         
-
+        if method_id.startswith("inventory"):
+            ...
+        elif method_id.startswith("results"):
+            ...
+        elif method_id.startswith("item"):
+            ...
+        elif method_id.startswith("overall"):
+            ...
+        elif method_id.startswith("import"):
+            ...
+    
 # GUI Contains the primary window. Each tab is defined as a separate class to keep stuff more organized
 class _GUI(tk.Frame):
     def __init__(self, window, **kw):

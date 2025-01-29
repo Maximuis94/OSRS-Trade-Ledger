@@ -8,7 +8,7 @@ import shutil
 import time
 from collections.abc import Callable, Iterable
 from dataclasses import field
-from typing import Dict, Tuple, NamedTuple
+from typing import Dict, Tuple, NamedTuple, Any
 
 from .util import save, load, IOProtocol, _get_protocol
 
@@ -232,104 +232,133 @@ class File(str):
 
 
 class IFile:
-    path: str
-    protocol: IOProtocol or None
-    folder: str
-    file: str
-    extension: str
-    allow_overwrite: bool
-    exception_handler_load: Callable
-    exception_handler_save: Callable
+    file: File
     
-    read_only: bool
-    save: Callable
-    delete: Callable
+    @property
+    def path(self) -> str:
+        """The full path to the file."""
+        return self.file.path
+
+    @property
+    def protocol(self) -> IOProtocol | None:
+        """The I/O protocol associated with the file."""
+        return self.file.protocol
+
+    @property
+    def folder(self) -> str:
+        """The folder containing the file."""
+        return self.file.folder
+
+    @property
+    def extension(self) -> str:
+        """The file extension."""
+        return self.file.extension
+
+    @property
+    def allow_overwrite(self) -> bool:
+        """Whether overwriting the file is allowed."""
+        return self.file.allow_overwrite
+
+    @property
+    def exception_handler_load(self) -> Callable:
+        """The exception handler for loading operations."""
+        return self.file.exception_handler_load
+
+    @property
+    def exception_handler_save(self) -> Callable:
+        """The exception handler for saving operations."""
+        return self.file.exception_handler_save
+
+    @property
+    def read_only(self) -> bool:
+        """Whether the file is read-only."""
+        return self.file.read_only
     
-    default_args: Dict[str, any]
-    verbose: bool
-    io_fail_freeze: float
-    
-    def __init__(self, path: str, **kwargs):
-        self.__dict__.update(File(path, **kwargs).__dict__)
+    @read_only.setter
+    def read_only(self, value: bool):
+        self.file.read_only = value
+
+    @property
+    def save(self) -> Callable:
+        """The method for saving the file."""
+        return self.file.save
+
+    @property
+    def delete(self) -> Callable:
+        """The method for deleting the file."""
+        return self.file.delete
+
+    @property
+    def default_args(self) -> Dict[str, Any]:
+        """The default arguments for file operations."""
+        return self.file.default_args
+
+    @property
+    def verbose(self) -> bool:
+        """Whether verbose output is enabled."""
+        return self.file.verbose
+
+    @property
+    def io_fail_freeze(self) -> float:
+        """The freeze duration after an I/O failure."""
+        return self.file.io_fail_freeze
     
     def _save(self, data, **kwargs) -> bool:
-        """
-        Save `data` at File.path using pickle.
-
-        Parameters
-        ----------
-        data :
-        verify_file :
-        kwargs :
-
-        Returns
-        -------
-
-        """
-        ...
+        """Save `data` at `file.path` using pickle."""
+        return self.file._save(data, **kwargs)
     
     def write_operation_read_only(self, *args, **kwargs):
-        """ Override that is applied if the file is set to read-only """
-        ...
+        """Override that is applied if the file is set to read-only."""
+        return self.file.write_operation_read_only(*args, **kwargs)
     
     def load(self, **kwargs):
-        """ Load the file at File.path and return its contents. Invoke exception handlers if configured+necessary. """
-        ...
+        """Load the file at File.path and return its contents. Invoke exception handlers if configured+necessary."""
+        return self.file.load(**kwargs)
     
     def _delete(self) -> bool:
-        """ Delete the file at File.path. Return True if the file does not exist upon completion. """
-        ...
+        """Delete the file at File.path. Return True if the file does not exist upon completion."""
+        return self.file._delete()
     
     def exists(self) -> bool:
-        """ Return True if a file exists at File.path """
-        ...
+        """Return True if a file exists at File.path."""
+        return self.file.exists()
     
     def mtime(self) -> float:
-        """ Return the last modified timestamp of the file at File.path """
-        ...
+        """Return the last modified timestamp of the file at File.path."""
+        return self.file.mtime()
     
     def ctime(self) -> float:
-        """ Return the created timestamp of the file at File.path"""
-        ...
+        """Return the created timestamp of the file at File.path."""
+        return self.file.ctime()
     
     def mdt(self) -> datetime.datetime:
-        """ Return the last modified timestamp of the file at File.path as datetime.datetime """
-        ...
+        """Return the last modified timestamp of the file at File.path as datetime.datetime."""
+        return self.file.mdt()
     
     def cdt(self) -> datetime.datetime:
-        """ Return the created timestamp of the file at File.path as datetime.datetime """
-        ...
+        """Return the created timestamp of the file at File.path as datetime.datetime."""
+        return self.file.cdt()
     
     def copy(self, to: str):
-        """ Copy the file at File.path to `to` """
-        ...
+        """Copy the file at File.path to `to`."""
+        return self.file.copy(to)
     
     def fsize(self) -> int:
-        """ Return the file size of the file at File.path as a formatted, abbreviated string """
-        ...
+        """Return the file size of the file at File.path as a formatted, abbreviated string."""
+        return self.file.fsize()
     
     def toggle_read_only(self, read_only: bool = None):
-        """ Toggle read-only mode, or set it to a specific value if `read_only` is passed. """
-        ...
+        """Toggle read-only mode, or set it to a specific value if `read_only` is passed."""
+        return self.file.toggle_read_only(read_only)
     
     def set_default_kwargs(self, add_args: Dict[str, any] = None, del_args: Iterable[str] = None):
-        """
-        Alter the default kw args configuration by adding or removing keyword args. This kwargs dict is passed as
-        **kwargs whenever save() or load() is called.
-
-        Parameters
-        ----------
-        add_args : Dict[str, any], optional, None by default
-            Dict with args that are to be added
-        del_args : Iterable[str], optional, None by default
-            Iterable with keywords that are to be removed from the dict
-        """
-        ...
+        """Alter the default kw args configuration by adding or removing keyword args."""
+        return self.file.set_default_kwargs(add_args, del_args)
     
     def split_ext(self) -> Tuple[str, str]:
-        """ Return this File's path as a tuple of the file path without extension and its extension (including .) """
-        ...
+        """Return this File's path as a tuple of the file path without extension and its extension (including .)."""
+        return self.file.split_ext()
     
     def has_ext(self, ext: str) -> bool:
-        """ Return True if this file ends with extension `ext` """
-        ...
+        """Return True if this file ends with extension `ext`."""
+        return self.file.has_ext(ext)

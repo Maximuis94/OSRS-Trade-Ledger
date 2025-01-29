@@ -145,5 +145,6 @@ __all__ = ["itemdb", "Item"]
 if __name__ == '__main__':
     i = itemdb["Cannonball"]
     print(i.__repr__())
+    print(i.sqlite_columns())
     exit(1)
     

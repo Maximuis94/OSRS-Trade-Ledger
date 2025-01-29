@@ -12,6 +12,7 @@ import numpy as np
 from attr import dataclass
 
 import global_variables.osrs as go
+from _sqlite_database.constants import DbRowFactory
 from file.file import File
 from inventory._classes import SQL
 from inventory.constants import transaction_db, empty_tuple
@@ -34,7 +35,8 @@ class TransactionDatabase:
         
         self.execute(transaction.sql_insert)
     
-    def execute(self, sql: SQL, con: sqlite3.Connection = None, row_factory: Callable[[sqlite3.Cursor, sqlite3.Row], any] = None, commit_transaction: bool = True) -> sqlite3.Cursor | sqlite3.Connection:
+    def execute(self, sql: SQL, con: sqlite3.Connection = None, row_factory: DbRowFactory = None,
+                commit_transaction: bool = True) -> sqlite3.Cursor | sqlite3.Connection:
         
         return_con = con is None
         if return_con:

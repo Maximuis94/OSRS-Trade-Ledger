@@ -11,7 +11,7 @@ import time
 import warnings
 from collections import namedtuple
 from collections.abc import Iterable, Sequence, Callable
-from typing import Tuple, List
+from typing import Tuple, List, Optional
 
 import numpy as np
 import pandas as pd
@@ -174,7 +174,7 @@ class NpyDbUpdater(Database):
             self.ts_con_wiki = self.src_db.cursor()
             self.ts_con_wiki.row_factory = self.timeseries_rows_factory_wiki
             
-            self.con = self.write_con()
+            self.con = self.write_con
             self.con_npy = self.cursor()
             self.con_npy.row_factory = self.factory_extract_npy
             self.column_file = gp.f_npy_column
@@ -260,7 +260,7 @@ class NpyDbUpdater(Database):
         """
         # print(f'\tUpdating Npy array db...')
         t0, t1 = self.t0, self.t1
-        self.con = self.write_con()
+        self.con = self.write_con
         exe_times_item = []
         self.n_processed, self.n_deleted, self.n_created, self.n_skipped = 0, 0, 0, 0
         last_item = self.item_id_list[-1]
@@ -681,13 +681,16 @@ class NpyDbUpdater(Database):
         n_to_do, n_failed = len(to_do), 0
         print('')
         print(f'\tUpdating Listbox. Processed 0/{n_to_do} items...      ', end='\r')
+        con = self.read_con
         for idx, item_id in enumerate([i for i in to_do if go.id_name[i] is not None]):
             print(f'\t[{fmt.passed_pc(self.t_start)}] Updating Listbox. Processed {idx+1}/{n_to_do} items...', end='\r')
             try:
+                
                 try:
-                    self.update_prices_listbox_entry(item_id, cur_t1=self.prices_listbox.get(item_id)[0].get('t0'))
+                    self.update_prices_listbox_entry(item_id, cur_t1=self.prices_listbox.get(item_id)[0].get('t0'),
+                                                     con=con)
                 except TypeError:
-                    self.update_prices_listbox_entry(item_id)
+                    self.update_prices_listbox_entry(item_id, con=con)
             except AttributeError as e:
                 n_failed += 1
                 print(f"Failed to create listbox entry for item {go.id_name[item_id]} "
@@ -696,7 +699,8 @@ class NpyDbUpdater(Database):
         self.prices_listbox_path.save(self.prices_listbox)
         print(f'\n\t[{fmt.passed_pc(self.t_start)}] Updated {n_to_do} listbox entries in {fmt.passed_pc(t_listbox)}')
     
-    def update_prices_listbox_entry(self, item_id: int, _n_rows: int = cfg.prices_listbox_days, n_intervals: int = 6, cur_t1: dict = None):
+    def update_prices_listbox_entry(self, item_id: int, _n_rows: int = cfg.prices_listbox_days, n_intervals: int = 6,
+                                    cur_t1: dict = None, **kwargs):
         """
         Compute prices listbox entries for `item_id`. Each row shows the price development for an item throughout the
         day and summarizes this.
@@ -716,6 +720,9 @@ class NpyDbUpdater(Database):
             Amount of rows to produce as output, where each row corresponds to a 24 hour timespan.
         n_intervals : int, optional, 6 by default
             Amount of smaller, equally sized intervals to divide each 24-hour timespan in
+        con: Optional[sqlite3.Connection]
+            Database connection used to access data. Passing one will prevent creation of a massive amount of
+            connections.
     
         Notes
         -----
@@ -728,7 +735,7 @@ class NpyDbUpdater(Database):
         if self.prices_listbox is None:
             raise TypeError
         try:
-            interval_start = self.execute(f"SELECT MAX(timestamp) FROM item{item_id:0>5}", factory=0).fetchone()-86100
+            interval_start = self.execute(f"SELECT MAX(timestamp) FROM item{item_id:0>5}", factory=0, **kwargs).fetchone()-86100
         except TypeError:
             interval_start = self.t0
         interval_size = int(24 / n_intervals)*3600
@@ -754,7 +761,7 @@ class NpyDbUpdater(Database):
                 params = (interval_start, interval_start+interval_size-1)
                 a5m_p = np.array(self.execute(f"SELECT avg5m_price FROM item{item_id:0>5} WHERE timestamp "
                                               f"BETWEEN ? AND ? AND avg5m_price > 0 ORDER BY avg5m_price",
-                                              params, factory=0).fetchall(), dtype=np.int32)
+                                              params, factory=0, **kwargs).fetchall(), dtype=np.int32)
                 
                 tag = buy_tags.get(interval_start % 86400 // 3600)
                 
@@ -774,7 +781,8 @@ class NpyDbUpdater(Database):
                 cur['s_24h_high'] = s_h
                 cur['volume'] = int(self.execute(f"SELECT AVG(wiki_volume) FROM item{item_id:0>5} WHERE timestamp "
                                                  f"BETWEEN ? AND ? ORDER BY timestamp ",
-                                                 (interval_start-86400, interval_start), factory=0).fetchone())
+                                                 (interval_start-86400, interval_start), factory=0,
+                                                 **kwargs).fetchone())
                 cur['delta_s_b'] = s_h - min_buy
             
             except ValueError:

@@ -26,7 +26,6 @@ from global_variables import variables as var
 from global_variables.data_classes import *
 from sqlite.executable import insert_sql_dict
 from util.sql import get_db_contents
-__t0__ = time.perf_counter()
 
 
 #######################################################################################################################
@@ -227,10 +226,15 @@ class Row:
                 self.primary_keys = tuple([col.name for _, col in self.columns.items() if col.is_primary_key])
             except IndexError:
                 # print(kwargs)
-                if kwargs.get('n_primary_keys') is None:
-                    kwargs['n_primary_keys'] = sum([int(col.is_primary_key) for col in kwargs.get('columns')])
+                n_primary_keys = kwargs.get("n_primary_keys")
+                if n_primary_keys is None:
+                    if isinstance(self.column_list[0], str):
+                        n_primary_keys = 1
+                    else:
+                        n_primary_keys = sum([int(col.is_primary_key) for col in kwargs.get('columns')])
+                    
                 # print(kwargs.get('n_primary_keys'))
-                self.columns = {col: Column(col, is_primary_key=idx<kwargs.get('n_primary_keys')) for idx, col in enumerate(self.column_list)}
+                self.columns = {col: Column(col, is_primary_key=idx<n_primary_keys) for idx, col in enumerate(self.column_list)}
         except AttributeError as e:
             if kwargs.get('allow_auto_tuple_factory'):
                 # self.__init__(row_tuple=namedtuple(self.name()))
@@ -299,7 +303,7 @@ class Table(Row):
         self.db_file = db_file
         
         if row_tuple is None:
-            column_list = [c.name for c in kwargs.get('columns')]
+            column_list = [c if isinstance(c, str) else c.name for c in kwargs.get('columns')]
             row_tuple = namedtuple(table_name+'Tuple', column_list)
         super().__init__(table_name=table_name, row_tuple=row_tuple, db_file=db_file, **kwargs)
         

@@ -2,19 +2,16 @@
 TODO: Check output/unsubmitted_transactions.csv voor transacties die nog gesubmit moeten worden
 """
 import json
-import os
+import os.path
 import sqlite3
-import time
-from collections import namedtuple
 from dataclasses import dataclass, field
 
-import pandas as pd
-
 from venv_auto_loader.active_venv import *
-from model.database import Database
-import global_variables.path as gp
+
 import global_variables.osrs as go
+import global_variables.path as gp
 import util.unix_time as ut
+
 __t0__ = time.perf_counter()
 
 to_submit = []
@@ -83,57 +80,89 @@ def is_runelite_json_export(path: str):
 
 def merge_runelite_json_files(wd: str, src_dir: str):
     to_submit = []
-    src_dir = None
-    wd = None
+    # src_dir = None
+    # wd = None
     
     cur_files = [f.split('.')[0] for f in os.listdir(wd) if is_runelite_json_export(wd+f)]
     new_files = [f.split('.')[0] for f in os.listdir(src_dir) if is_runelite_json_export(src_dir+f)]
     
     accounts = [f.split('.')[0] for f in cur_files]
-    print(accounts)
-    db = Database(gp.f_db_local, read_only=True)
-    
-    merged = {a: json.loads(open(wd+a+'.json', 'rb').read().decode()) for a in accounts}
-    for a, transactions in merged.items():
-        transactions = [RowTuple(**t) for t in transactions]
-        transactions = [t for t in transactions if t.can_submit() and not t.is_submitted(db, False) and t.account_name==a]
-        to_submit += [{k: t.__getattribute__(k) for k in RowTuple.__match_args__} for t in transactions]
-        print(a, len(transactions))
-        
-        for t in transactions[-10:]:
-            print(t)
-    pd.DataFrame(to_submit).to_csv(gp.dir_output+'unsubmitted_transactions.csv', index=False)
-    exit(1)
+    # print(accounts)
+    # db = Database(gp.f_db_local, read_only=True)
+    #
+    merged = {a: json.load(open(wd+a+'.json', 'r')) for a in accounts}
+    # for a, transactions in merged.items():
+    #     transactions = [RowTuple(**t) for t in transactions]
+    #     transactions = [t for t in transactions if t.can_submit() and not t.is_submitted(db, False) and t.account_name==a]
+    #     to_submit += [{k: t.__getattribute__(k) for k in RowTuple.__match_args__} for t in transactions]
+    #     print(a, len(transactions))
+    #
+    #     for t in transactions[-10:]:
+    #         print(t)
+    # pd.DataFrame(to_submit).to_csv(gp.dir_output+'unsubmitted_transactions.csv', index=False)
+    # exit(1)
     # {'timestamp': 1720284048, 'item_id': 157, 'is_buy': 0, 'quantity': 1, 'price': 4369, 'value': 4369,
     #  'account_name': 'Zwaardvis94'}
     for a in accounts:
+        print(f"\nCurrent account: {a}")
         merged_json_file = wd + a + '.json'
-        cur_rows = [json.loads(open(merged_json_file, 'rb').read().decode())]
-        
+        # cur_rows = [json.loads(open(merged_json_file, 'rb').read().decode())]
+        save_file = False
+        entry_count = 0
+        entries = json.load(open(merged_json_file, 'r'))
+        n_start = len(entries)
         for f in new_files:
-            if f[:len(a)] != a:
+            if f.rstrip('_') != a or f[-1] != '_':
                 continue
-            print(a, f)
-            continue
-            rows = json.loads(open(src_dir+f, 'rb').read().decode())
+            path = os.path.join(src_dir, f + '.json')
             
-            if f[-4:] == 'json':
-                with open(wd+f, 'rb') as io:
-                    account = os.path.split(f.replace('_', ''))[-1].split('.')[0]
-                    if account not in accounts:
-                        print('\n\n\n', account)
-                        accounts.append(account)
-                        merged[accounts.index(account)] = json.loads(io.read().decode())
-                        print(merged[accounts.index(account)])
-                    else:
-                        temp = merged.get(accounts.index(account))
-                        json_content = json.loads(io.read().decode())
-                        for el in json_content:
-                            if el not in temp:
-                                temp.append(el)
-                        merged[accounts.index(account)] = temp
-                        print(json_content)
+            if not os.path.exists(path) or f[:len(a)] != a:
+                continue
+            new_entries = json.load(open(path, 'r'))
+            # print(f"\nCurrent file: {f}.json with {len(new_entries)} entries for account {a}")
+            
+            n = 0
+            for e in new_entries:
+                if e not in entries:
+                    entries.append(e)
+                    n += 1
+            print(f"\tAdded {n}/{len(new_entries)} entries from {f}.json")
+        print(f"Added {len(entries) - n_start} entries for account {a}")
+        if entry_count > 0:
+            json.dump(entries, open(merged_json_file, 'w'), indent=4)
+        
+        #     if True or f[-4:] == 'json':
+        #         with open(path, 'r') as io:
+        #             new_entries = json.load(io)
+        #
+        #             for e in new_entries:
+        #                 if e not in entries:
+        #                     entries.append(e)
+        # print(f"Added {len(entries)-n_start} entries for account {a}")
+        
+        #             print(new_entries, f)
+        #             exit(1)
+        #             # account = os.path.split(f.replace('_', ''))[-1].split('.')[0]
+        #             account = a
+        #             if False and merged.get(account) is None:
+        #                 print('\n\n\n', account)
+        #                 accounts.append(account)
+        #                 merged[account] = json.load(io)
+        #                 entry_count = len(merged.get(account))
+        #                 # print(merged[account])
+        #             else:
+        #                 json_content = json.load(io)
+        #                 for el in json_content:
+        #                     if el not in entries:
+        #                         entries.append(el)
+        #                         entry_count += 1
+        #                 merged[account] = entries
+        #                 # print(json_content)
+        # if entry_count > 0:
+        #     json.dump(entries, open(merged_json_file, 'w'), indent=4)
+        # print(f"Added {entry_count} new rows for {a}")
+
 
 if __name__ == '__main__':
-    merge_runelite_json_files('','')
+    merge_runelite_json_files(gp.dir_runelite_ge_export, gp.dir_data+'ge_exports/')
     

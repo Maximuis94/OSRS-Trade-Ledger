@@ -1,13 +1,20 @@
 import tkinter as tk
-from abc import ABCMeta
 from collections.abc import Sized
 from tkinter import ttk as ttk
-from typing import List, Tuple, Callable, Iterable
+from typing import List, Tuple, Callable, Iterable, Optional
 
 from gui.base.frame import GuiFrame
 from gui.component.event_bindings import EventBinding
+from gui.util.font import FontSize, FontFamily, Font
+from gui.util.str_formats import shorten_string
 from util import gui as ug
 from util.data_structures import remove_dict_entries
+
+
+_grid_args = "column", "columnspan", "row", "rowspan", "in", "ipadx", "ipady", "padx", "pady", "sticky"
+
+
+_default_font = Font(FontSize.NORMAL, FontFamily.CONSOLAS)
 
 
 class GuiWidget(ttk.Widget):
@@ -30,26 +37,37 @@ class GuiWidget(ttk.Widget):
     sticky: str = 'N'
     _text: tk.StringVar
     _tkinter_variable_dict: dict = {}
-    font: tuple = ()
+    font: Font = _default_font
+    
+    _MAX_LENGTH: Optional[int] = None
+    """String length limit imposed. If it is exceeded, shorten the string"""
     
     def apply_grid(self, **kwargs):
         """ Calls the grid method of the tkinter object to place it. kwargs will be passed along to the grid() call """
         try:
             # print('grid', kwargs)
+            for k in _grid_args:
+                if hasattr(self, k) and kwargs.get(k) is None:
+                    kwargs[k] = getattr(self, k)
             super().grid(**self.frame.get_grid_kwargs(self.tag, **kwargs))
-        except ZeroDivisionError:
+        except AttributeError:
             raise AttributeError("GuiWidget does not appear to have a grid method. This method should be inherited via"
                                  " an existing tkinter widget class like ttk.Button.")
-        
-    def init_widget_start(self, frame: GuiFrame, tag: str, text: str = None, text_variable: tk.StringVar = None, **kwargs):
+    
+    def init_widget_start(self, frame: GuiFrame, tag: str, text: str = None, text_variable: tk.StringVar = None,
+                          **kwargs):
         """ Method that is to be called before initializing the superclass in the subclass __init__() """
         self.frame = frame
         self.tag = tag
         
+        self._MAX_LENGTH = kwargs.pop("max_text_length", None)
+        
+        if kwargs.get('font') is not None:
+            self.font = kwargs.pop('font')
+        
         self._text = tk.StringVar() if text_variable is None else text_variable
         if text is not None:
             self._text.set(text)
-            
         kwargs = self._set_padding(**kwargs)
     
     def init_widget_end(self, event_bindings: Iterable[Tuple[str, Callable]] and Sized = (), apply_grid: bool = True,
@@ -67,7 +85,11 @@ class GuiWidget(ttk.Widget):
     
     @text.setter
     def text(self, text: str):
-        self._text.set(text)
+        if self._MAX_LENGTH is not None and len(text) > self._MAX_LENGTH:
+            text = shorten_string(text, self._MAX_LENGTH)
+            self._text.set(text)
+        else:
+            self._text.set(text)
         
     def set_text_variable(self, string_var: tk.StringVar):
         """ Set the current text tk.StringVar to `string_var` """

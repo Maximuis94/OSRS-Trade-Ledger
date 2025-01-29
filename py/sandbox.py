@@ -5,7 +5,9 @@ import time
 
 import pandas as pd
 
+from backend.download import realtime_prices
 from global_variables.importer import *
+from global_variables.itemdb import itemdb
 from model.database import Database
 from model.timeseries import TimeseriesDB
 
@@ -110,6 +112,49 @@ def remove_rows(id_threshold: int, db_path: str):
 
 
 if __name__ == "__main__":
+    db = Database(gp.f_db_timeseries)
+    rp = realtime_prices(True)
+    
+    for item_id in go.item_ids:
+        sql = f"""SELECT price, volume FROM item{item_id:0>5} WHERE src=0 ORDER BY timestamp DESC"""
+        sql2 = f"""SELECT price FROM item{item_id:0>5} WHERE src IN (1, 2) and price > 0 ORDER BY timestamp DESC LIMIT 1"""
+        try:
+            wiki_price, wiki_volume = db.execute(sql, factory=tuple).fetchone()
+        except TypeError:
+            continue
+        
+        if wiki_price is None:
+            continue
+        try:
+            buy_price = min(db.execute(sql2, factory=0).fetchall())
+        except ValueError:
+            continue
+        if buy_price == 0 or wiki_price < 10000 and wiki_price / buy_price - 1 < .1 or wiki_volume * (wiki_price - buy_price) < 1000000:
+            continue
+            
+        if (wiki_price-buy_price) * itemdb[item_id].buy_limit > 1000000 and wiki_price > 10000 and wiki_price / buy_price - 1 > .5:
+            print(item_id, go.id_name[item_id], wiki_price, buy_price, (wiki_price-buy_price) * itemdb[item_id].buy_limit, "" if buy_price == 0 else f"{(wiki_price / buy_price - 1) * 100:.1f}%")
+            
+        elif itemdb[item_id].buy_limit == 0 and wiki_price - buy_price > 1000 and not itemdb[item_id].equipable:
+            # print("lim=0", item_id, go.id_name[item_id], wiki_price, buy_price, wiki_price - buy_price)
+            ...
+    
+    # for item_id in go.item_ids[:100]:
+    #     print(f"SELECT * FROM item{item_id:0>5}")
+    # guide_prices = {item_id: db.execute(f"SELECT * FROM item{item_id:0>5}").fetchall() for item_id in go.npy_items[:100]}
+    
+    exit(883738462)
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
     # from global_variables import path as gp, osrs as go
     # con = sqlite3.connect(gp.f_db_npy)
     #

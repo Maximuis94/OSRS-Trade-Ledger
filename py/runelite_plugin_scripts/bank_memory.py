@@ -217,7 +217,7 @@ def convert_to_transactions(input_file: File | str):
 # TODO: Parse exported CSV file, generate stock count transactions (X) from all lines w/ count_item=1 for which
 #  the balance differs significantly.
 if __name__ == "__main__":
-    #     export_to_csv()
+    export_to_csv()
     # convert_to_transactions(r"C:\Users\Max Moons\Documents\GitHub\OSRS-Trade-Ledger\py\data\bank_memory\item-counts_24-12-22-20-04.csv")
     ...
     
