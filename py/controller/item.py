@@ -291,9 +291,12 @@ class ItemController(Database):
     
     def get_item(self, item_name: str, augment_items: bool = None) -> Item:
         """Fetch an Item with item_id=`item_id` from the sqlite database"""
-        self.set_item_factory(augment_items)
         try:
-            return self.execute(self.select_by_name, {'item_name': item_name}).fetchone()
+            return self.execute(
+                self.select_by_name,
+                {'item_name': item_name},
+                row_factory=self.augmented_item_factory if augment_items is None or augment_items else self.item_factory
+            ).fetchone()
         except OSError as e:
             print(item_name, self.select_by_id)
             raise e
@@ -407,11 +410,18 @@ class ItemController(Database):
     
     def __getitem__(self, item: int | str) -> Item:
         """Retrieve an Item from the database"""
-        return self.get_item(item)
+        return self.augmented_item_factory(None, self.get_item(item))
             
 
 if __name__ == '__main__':
     idb = ItemController(path=gp.f_db_local)
-    idb["Mahogany logs"].print_item_info()
+    mahogany_logs = idb["Mahogany logs"]
+    nature_runes = idb["Nature rune"]
+    astral_runes = idb["Astral rune"]
+    mahogany_plank = idb["Mahogany plank"]
+    
+    print(mahogany_plank.current_sell - mahogany_logs.current_buy - 1050 - nature_runes.current_buy - astral_runes.current_buy*2)
+    
+    
     
     
