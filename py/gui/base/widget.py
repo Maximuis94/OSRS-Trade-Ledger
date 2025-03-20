@@ -1,206 +1,354 @@
+"""
+Module: gui_base_widget.py
+===========================
+Defines a mixin base class for GUI widgets that encapsulates common behavior such as
+grid placement, text handling, event binding, and Tk variable management.
+
+Classes
+-------
+GuiWidget
+    Base mixin for GUI widgets that provides common functionality to be used with
+    concrete Tkinter widget classes.
+
+Notes
+-----
+This class is intended to be used as a mixin together with a concrete widget class
+(e.g., ttk.Button, ttk.Label). It relies on a parent GuiFrame for grid placement and
+other layout-related operations.
+"""
 import tkinter as tk
-from collections.abc import Sized
-from tkinter import ttk as ttk
-from typing import List, Tuple, Callable, Iterable, Optional
-
+from multipledispatch import dispatch
+from typing import Any, Dict, List, Tuple, Callable, Optional
 from gui.base.frame import GuiFrame
-from gui.component.event_bindings import EventBinding
-from gui.util.font import FontSize, FontFamily, Font
+from gui.util.event_binding import EventBinding
+from gui.util.font import Font
 from gui.util.str_formats import shorten_string
-from util import gui as ug
-from util.data_structures import remove_dict_entries
+from gui.util.constants import grid_args as _GRID_ARGS, default_font as _DEFAULT_FONT
 
 
-_grid_args = "column", "columnspan", "row", "rowspan", "in", "ipadx", "ipady", "padx", "pady", "sticky"
-
-
-_default_font = Font(FontSize.NORMAL, FontFamily.CONSOLAS)
-
-
-class GuiWidget(ttk.Widget):
+class GuiWidget:
     """
-    Wrapper class for GUI widgets that defines basic widget behaviour
-    Each GUI widget has a master frame, 0-n event bindings, a set of tk vars and a font that is
-    applied.
+    Base mixin for GUI widgets that provides common functionality:
     
-    Notes
-    -----
-    This class should be inherited alongside another tk widget
+    - Automatic grid placement using the parent GuiFrame.
+    - Management of a Tkinter text variable.
+    - Event binding.
+    - Tkinter variable registration.
+    
+    This class is designed to be used in combination with a concrete Tkinter widget class.
+    
+    Attributes
+    ----------
+    frame : GuiFrame
+        The parent frame in which the widget is placed.
+    tag : str
+        The tag used to associate the widget with a specific position in the grid layout.
+    event_bindings : list of tuple
+        A list of event binding pairs (event, callback) to be applied to the widget.
+    padx : int
+        Horizontal padding for grid placement.
+    pady : int
+        Vertical padding for grid placement.
+    sticky : str
+        Sticky property for grid placement.
+    _text : tk.StringVar
+        The Tkinter StringVar used to manage the widget's text.
+    _tk_vars : dict
+        A dictionary for registered Tkinter variables.
+    font : Font
+        The font to be used by the widget.
+    _max_length : int
+        An optional maximum text length. If set, text longer than this will be shortened.
+    tk_widget: tk.Widget
+        The associated Widget
     """
-    __slots__ = "frame", "tag", "_text"
 
-    frame: GuiFrame
-    tag: str
-    event_bindings: List[Tuple[str, Callable]] = []
-    padx: int = 0
-    pady: int = 0
-    sticky: str = 'N'
-    _text: tk.StringVar
-    _tkinter_variable_dict: dict = {}
-    font: Font = _default_font
-    
-    _MAX_LENGTH: Optional[int] = None
-    """String length limit imposed. If it is exceeded, shorten the string"""
-    
-    def apply_grid(self, **kwargs):
-        """ Calls the grid method of the tkinter object to place it. kwargs will be passed along to the grid() call """
-        try:
-            # print('grid', kwargs)
-            for k in _grid_args:
-                if hasattr(self, k) and kwargs.get(k) is None:
-                    kwargs[k] = getattr(self, k)
-            super().grid(**self.frame.get_grid_kwargs(self.tag, **kwargs))
-        except AttributeError:
-            raise AttributeError("GuiWidget does not appear to have a grid method. This method should be inherited via"
-                                 " an existing tkinter widget class like ttk.Button.")
-    
-    def init_widget_start(self, frame: GuiFrame, tag: str, text: str = None, text_variable: tk.StringVar = None,
-                          **kwargs):
-        """ Method that is to be called before initializing the superclass in the subclass __init__() """
-        self.frame = frame
-        self.tag = tag
-        
-        self._MAX_LENGTH = kwargs.pop("max_text_length", None)
-        
-        if kwargs.get('font') is not None:
-            self.font = kwargs.pop('font')
-        
-        self._text = tk.StringVar() if text_variable is None else text_variable
-        if text is not None:
-            self._text.set(text)
-        kwargs = self._set_padding(**kwargs)
-    
-    def init_widget_end(self, event_bindings: Iterable[Tuple[str, Callable]] and Sized = (), apply_grid: bool = True,
-                        **kwargs):
-        """ Method that is to be called after initializing the superclass in the subclass __init__() """
-        self._set_bindings(event_bindings)
-        if apply_grid:
-            # print(kwargs)
-            self.apply_grid(**kwargs)
-    
-    @property
-    def text(self) -> str:
-        """ Main text variable of the Widget. Its specific usage depends on the specific widget subclass. """
-        return self._text.get()
-    
-    @text.setter
-    def text(self, text: str):
-        if self._MAX_LENGTH is not None and len(text) > self._MAX_LENGTH:
-            text = shorten_string(text, self._MAX_LENGTH)
-            self._text.set(text)
-        else:
-            self._text.set(text)
-        
-    def set_text_variable(self, string_var: tk.StringVar):
-        """ Set the current text tk.StringVar to `string_var` """
-        self._text = string_var
-    
-    def _set_padding(self, **kwargs):
-        """ Set x- and y-padding for this Widget, either via padxy as a tuple, or padx and pady separately """
-        keys = frozenset(('padxy', 'padx', 'pady')).intersection(tuple(kwargs.keys()))
-        # print(kwargs, keys)
-        if len(keys) > 0:
-            for next_pad in frozenset(('padxy', 'padx', 'pady')).intersection(kwargs):
-                value = kwargs.get(next_pad)
-                if value is not None:
-                    if next_pad == 'padxy':
-                        self.padx, self.pady = value
-                        break
-                    else:
-                        self.__setattr__(next_pad, value)
-            kwargs = remove_dict_entries(_dict=kwargs, keys=keys)
-        return kwargs
-        
-    def _set_bindings(self, event_bindings: List[Tuple[str, Callable]] = None):
-        if event_bindings is not None:
-            self.event_bindings += event_bindings
-        
-        for trigger, command in self.event_bindings:
-            self.bind(trigger, command)
-    
-    def add_tk_var(self, var: tk.Variable, key: str, value: any = None):
-        if value is not None:
-            var.set(value)
-        self._tkinter_variable_dict[key] = var
-        
-    # def set_event_bindings(self, bindings: List[tuple] = None, replace_bindings: bool = True):
-    def set_event_bindings(self, event_bindings: List[Tuple[str, Callable] or EventBinding] = None,
-                           replace_bindings: bool = True):
+    __slots__ = ("frame", "tag", "event_bindings", "padx", "pady", "sticky",
+                 "_text", "_tk_vars", "font", "_max_length")
+    tk_widget: tk.Widget
+
+    def __init__(self):
         """
-        Iterate over the configured event bindings list and bind them. If additional bindings are supplied, append them
-        to the existing list or replace the existing bindings with them.
+        Initialize the GuiWidget with default values.
+        
+        Notes
+        -----
+        This method initializes internal attributes with default values. It does not create the actual
+        Tkinter widget instance; that is the responsibility of the concrete subclass.
+        """
+        self.frame: Optional[GuiFrame] = None
+        self.tag: str = ""
+        self.event_bindings: List[EventBinding] = []
+        self.padx: int = 0
+        self.pady: int = 0
+        self.sticky: str = 'N'
+        self._text: Optional[tk.StringVar] = None
+        self._tk_vars: Dict[str, tk.Variable] = {}
+        self.font: Font = _DEFAULT_FONT
+        self._max_length: Optional[int] = None
+
+    def apply_grid(self, **kwargs):
+        """
+        Place the widget using the grid geometry manager, merging default grid options with those provided.
+        
+        Expects that the concrete widget instance is stored in the attribute 'tk_widget'.
         
         Parameters
         ----------
-        event_bindings : List[tuple], optional, None by default
-            An Iterable with tuples that specify an event listener and the command to execute if the event triggers.
-        replace_bindings : bool, optional, True by default
-            Flag that dictates whether `bindings` will replace self.event_bindings, or whether it will be added to it.
+        **kwargs : dict
+            Additional grid options (e.g., padx, pady, sticky) to be merged with default settings.
+        
+        Raises
+        ------
+        AttributeError
+            If the widget is not associated with a valid GuiFrame or if the underlying widget does not have a grid method.
+        """
+        for key in _GRID_ARGS:
+            if key not in kwargs and hasattr(self, key):
+                kwargs[key] = getattr(self, key)
+        if self.frame is None or not hasattr(self.frame, "get_grid_kwargs"):
+            raise AttributeError("GuiWidget must be associated with a valid GuiFrame instance.")
+        grid_kwargs = self.frame.get_grid_kwargs(self.tag, **kwargs)
+        self.tk_widget.grid(**grid_kwargs)
 
+    def init_widget_start(self, frame: GuiFrame, tag: str, text: str = None,
+                          text_variable: tk.StringVar = None, **kwargs):
+        """
+        Initialize common widget properties before creating the concrete widget.
+        
+        This method sets the parent frame, widget tag, and text variable. It also processes any padding parameters.
+        
+        Parameters
+        ----------
+        frame : GuiFrame
+            The parent GuiFrame.
+        tag : str
+            The tag for grid placement.
+        text : str, optional
+            The initial text for the widget.
+        text_variable : tk.StringVar, optional
+            A pre-existing StringVar to use for the widget's text.
+        **kwargs : dict
+            Additional keyword arguments (e.g., padding options).
+        """
+        self.frame = frame
+        self.tag = tag
+        self._max_length = kwargs.pop("max_text_length", None)
+        if "font" in kwargs:
+            self.font = kwargs.pop("font")
+        if text_variable is None:
+            self._text = tk.StringVar(frame.frame, value=text)
+        else:
+            if text is not None:
+                text_variable.set(text)
+            self._text = text_variable
+        self._set_padding(**kwargs)
+
+    def init_widget_end(self, event_bindings: List[Tuple[str, Callable]] = None,
+                        apply_grid_flag: bool = True, **kwargs):
+        """
+        Finalize widget initialization.
+        
+        This method sets event bindings and applies grid placement if requested.
+        
+        Parameters
+        ----------
+        event_bindings : list of tuple, optional
+            A list of event binding pairs (event, callback) to attach to the widget.
+        apply_grid_flag : bool, optional
+            If True, calls apply_grid() to place the widget using the grid geometry manager.
+        **kwargs : dict
+            Additional grid options for apply_grid.
+        """
+        if event_bindings:
+            self._set_bindings(event_bindings)
+        if apply_grid_flag:
+            self.apply_grid(**kwargs)
+
+    @property
+    def text(self) -> str:
+        """
+        Get the current text of the widget.
+        
         Returns
         -------
+        str
+            The text stored in the widget's StringVar.
+        """
+        return self._text.get() if self._text else ""
 
+    @text.setter
+    def text(self, new_text: str):
         """
-        if event_bindings is not None:
-            self.event_bindings += event_bindings
+        Set the widget's text, shortening it if it exceeds _max_length.
         
-        for trigger, command in self.event_bindings:
-            self.bind(trigger, command)
-        if isinstance(event_bindings, list) and len(event_bindings[0]) == 2:
-            self.event_bindings = event_bindings if replace_bindings else self.event_bindings + event_bindings
-            
-        for next_binding in self.event_bindings:
-            try:
-                if isinstance(next_binding, EventBinding):
-                    self.bind(next_binding.tag.value(), next_binding.callback)
-            except AttributeError:
-                self.bind(next_binding[0], next_binding[1])
-    
-    def set_tk_var(self, name: str, value: (int, float, bool, str), set_new_var: bool = True):
+        Parameters
+        ----------
+        new_text : str
+            The new text to set.
         """
-        Set the tkinter variable listen in the tkinter variable dict with key `name` to `value`. If there is no variable
-        listed under `name`, register a new one.
+        if self._max_length is not None and len(new_text) > self._max_length:
+            new_text = shorten_string(new_text, self._max_length)
+        if self._text is None:
+            self._text = tk.StringVar(value=new_text)
+        else:
+            self._text.set(new_text)
+
+    def set_text_variable(self, text_var: tk.StringVar):
+        """
+        Assign a new tk.StringVar as the widget's text variable.
+        
+        Parameters
+        ----------
+        text_var : tk.StringVar
+            The new text variable.
+        """
+        self._text = text_var
+
+    def _set_padding(self, **kwargs):
+        """
+        Process and set padding parameters from kwargs.
+        
+        Supports 'padxy', 'padx', and 'pady'.
+        
+        Parameters
+        ----------
+        **kwargs : dict
+            Padding options.
+        """
+        pad_keys = {"padxy", "padx", "pady"}
+        for key in pad_keys.intersection(kwargs.keys()):
+            value = kwargs[key]
+            if key == "padxy":
+                self.padx, self.pady = (value, value) if not isinstance(value, (tuple, list)) else value[:2]
+                break
+            else:
+                setattr(self, key, value)
+        for key in pad_keys:
+            kwargs.pop(key, None)
+
+    def _set_bindings(self, event_bindings: List[Tuple[str, Callable]]):
+        """
+        Set event bindings on the underlying widget.
+        
+        Parameters
+        ----------
+        event_bindings : list of tuple
+            A list of (event, callback) pairs to be bound to the widget.
+        """
+        self.event_bindings.extend(event_bindings)
+        for trigger, callback in self.event_bindings:
+            self.tk_widget.bind(trigger, callback)
+
+    def add_tk_var(self, var: tk.Variable, key: str, value: Any = None):
+        """
+        Register a Tkinter variable with an associated key.
+        
+        Parameters
+        ----------
+        var : tk.Variable
+            The Tkinter variable to register.
+        key : str
+            The key under which the variable will be stored.
+        value : any, optional
+            If provided, the variable will be set to this value.
+        """
+        if value is not None:
+            var.set(value)
+        self._tk_vars[key] = var
+
+    def set_tk_var(self, name: str, value: Any, create_new: bool = True):
+        """
+        Update a Tkinter variable by name. If not found and creation is allowed, a new variable is created.
         
         Parameters
         ----------
         name : str
-            The key the tkinter var should be set to
-        value : int or float or bool or str
-            The value to set the tkinter var to
-        set_new_var : bool, optional, True by default
-            If True, allow a new variable to be registered.
-
-        Returns
-        -------
-
-        """
-        try:
-            tk_var = self._tkinter_variable_dict[name]
-        except KeyError:
-            if not set_new_var:
-                raise AttributeError(f"No tkinter variable was registered under `{name}`. If you wish to register this "
-                                     f"as a new variable, pass `set_new_var=True` as well")
-            else:
-                tk_var = ug.tk_var(value=value, name=name)
-        else:
-            tk_var.set(value)
+            The key associated with the Tk variable.
+        value : any
+            The new value to assign.
+        create_new : bool, optional
+            If True, a new Tk variable is created if one does not exist. Otherwise, raises KeyError.
         
-        self._tkinter_variable_dict[name] = tk_var
+        Raises
+        ------
+        KeyError
+            If the variable is not found and create_new is False.
+        """
+        if name in self._tk_vars:
+            self._tk_vars[name].set(value)
+        elif create_new:
+            new_var = tk.Variable(value=value, name=name)
+            self._tk_vars[name] = new_var
+        else:
+            raise KeyError(f"Tk variable '{name}' not found and creation is disabled.")
+    
+    # @dispatch(str, callable, str)
+    def bind_event(self, event: str, callback: Callable, description: str = ""):
+        """
+        Bind an event to the underlying Tk widget and record the binding.
 
-    # def grid(self, param):
-    #     pass
-    def verify_attribute(self, attribute_name: str, attribute_value: any = None, failed_method: str = None):
-        """ Set an attribute value or verify if an attribute is already set. If not, raise a descriptive error """
-        if attribute_value is not None:
-            self.__setattr__(attribute_name, attribute_value)
-            return
-        try:
-            if self.__getattribute__(attribute_name) is None:
-                raise AttributeError()
-        except AttributeError:
-            s = f"Verification for attribute {attribute_name} failed."
-            if failed_method is not None:
-                s += f" Make sure it is already set while/before calling {failed_method}()"
-            raise AttributeError(s)
+        Parameters
+        ----------
+        event : str
+            The event sequence to bind (e.g., "<Button-1>", "<Enter>", etc.).
+        callback : Callable
+            The callback function to execute when the event occurs.
+        description : str, optional, "" by default
+            The description that will be added to the event binding
+        """
+        
+        self.tk_widget.bind(event, callback)
+        self.event_bindings.append(EventBinding(event, callback, description))
+    
+    # @dispatch(EventBinding)
+    def bind_event(self, event_binding: EventBinding):
+        """
+        Bind an event to the underlying Tk widget and record the binding.
 
+        Parameters
+        ----------
+        event_binding : EventBinding
+            EventBinding with all information needed
+        """
+        self.tk_widget.bind(*event_binding.bind_args)
+        self.event_bindings.append(event_binding)
+    
+    # @dispatch(str)
+    def unbind_event(self, event: str):
+        """
+        Unbind all callbacks associated with the given event from the underlying Tk widget.
 
+        Parameters
+        ----------
+        event : str
+            The event sequence to unbind (e.g., "<Button-1>").
+        """
+        self.tk_widget.unbind(event)
+        self.event_bindings = [b for b in self.event_bindings if b[0] != event]
+    
+    # @dispatch(EventBinding)
+    def unbind_event(self, event: EventBinding):
+        """
+        Unbind all callbacks associated with the given event from the underlying Tk widget.
+
+        Parameters
+        ----------
+        event : str
+            The event sequence to unbind (e.g., "<Button-1>").
+        """
+        self.tk_widget.unbind(event.event)
+        self.event_bindings.remove(event)
+    
+    @staticmethod
+    def tk_var(value: Any, name: str, master: Optional[tk.Frame | ttk.Frame | tk.Toplevel] = None) -> tk.Variable:
+        if isinstance(value, int):
+            return tk.IntVar(value=value, name=name, master=master)
+        elif isinstance(value, str):
+            return tk.StringVar(value=value, name=name, master=master)
+        elif isinstance(value, float):
+            return tk.DoubleVar(value=value, name=name, master=master)
+        elif isinstance(value, bool):
+            return tk.BooleanVar(value=value, name=name, master=master)
+        else:
+            return tk.Variable(value=value, name=name, master=master)

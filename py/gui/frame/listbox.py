@@ -5,23 +5,21 @@ This module contains the implementation of the GuiListbox
 import tkinter as tk
 import tkinter.ttk as ttk
 from collections.abc import Callable, Iterable
+from multipledispatch import dispatch
 from typing import List, Tuple, Optional
 
-from multipledispatch import dispatch
 from gui.base.frame import GuiFrame
-from gui.component.interface.row import IRow
-
-from gui.component.button import GuiButton
 from gui.base.frame import TkGrid
-from gui.component.filter.predefined_filters import Filters, NUM_FILTERS
-from gui.component.label import GuiLabel
-from gui.component._listbox._column import ListboxColumn
+from gui.component._listbox.column import ListboxColumn
 from gui.component._listbox.entry_manager import ListboxEntries
+from gui.component._listbox.row import ListboxRow
+from gui.component.button import GuiButton
+from gui.component._listbox.filter import Filter, NUM_FILTERS
+from gui.component.interface.row import IRow
+from gui.component.label import GuiLabel
+from gui.component._listbox.sort import Sort, Sorts
 from gui.util.colors import Color, Rgba
 from gui.util.constants import letters
-from gui.component.filter.filter import Filter
-from gui.component._listbox.row import ListboxRow
-from gui.component.sort.sort import Sort, Sorts
 
 
 class GuiListboxFrame(GuiFrame):

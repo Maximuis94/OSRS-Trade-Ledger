@@ -9,7 +9,7 @@ from typing import Tuple, Optional
 
 from gui.component.interface.filter import IFilter
 from gui.component.interface.row import IRow
-from gui.component.sort.sort import Sorts
+from gui.component._listbox.sort import Sorts
 
 
 # class ListboxMeta(ABCMeta):

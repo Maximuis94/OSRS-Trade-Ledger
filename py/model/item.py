@@ -6,7 +6,7 @@ This module contains the model for an OSRS item
 from typing import Tuple, Dict
 import global_variables.osrs as go
 import global_variables.path as gp
-from global_variables.data_classes import Item as _Item
+from common.classes.item import Item as _Item
 # import global_variables.variables as var
 from global_variables.variables import get_dtype, item_columns, item_metadata
 

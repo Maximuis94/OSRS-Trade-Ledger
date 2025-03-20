@@ -6,7 +6,6 @@ To prevent circular imports, this module should only be imported by the setup mo
 """
 import os.path
 import sqlite3
-import time
 from collections.abc import Iterable
 
 import pandas as pd
@@ -19,7 +18,7 @@ import global_variables.variables as var
 import sqlite.databases as sql_db
 import util.str_formats
 from file.file import File
-from model.database import Database, sql_create_timeseries_item_table
+from common import Database, sql_create_timeseries_item_table
 from sqlite.executable import create_index
 
 __t0__ = time.perf_counter()
@@ -332,6 +331,10 @@ def create_timeseries_db(db_file: str, item_ids: Iterable):
         con.execute(sql_create_timeseries_item_table(i))
     con.commit()
     con.close()
+
+
+def create_local_db():
+    """"""
 
 
 if __name__ == '__main__':

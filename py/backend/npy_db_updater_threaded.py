@@ -3,15 +3,11 @@ This executable module contains an implementation for generating the npy db
 
 """
 import ctypes
-import os
-import shutil
 import sqlite3
 import threading
-import time
-import warnings
 from collections import namedtuple
 from collections.abc import Iterable, Sequence, Callable
-from typing import Tuple, List, Optional
+from typing import List, Optional
 
 import numpy as np
 import pandas as pd
@@ -26,12 +22,12 @@ import util.file as uf
 import util.str_formats as fmt
 from util.logger import prt
 import util.unix_time as ut
-from controller.item import create_item, Item
+from common.item import create_item, Item
 from data_processing.npy_array_computations import avg_price_summed_volume
 from file.file import File
 from global_variables.data_classes import NpyDatapoint as NpyDp, NpyDatapoint
-from model.data_source import DataSource, SRC
-from model.database import Database
+from common import DataSource, SRC
+from common import Database
 from tasks.async_task import AsyncTask
 __t0__ = time.perf_counter()
 

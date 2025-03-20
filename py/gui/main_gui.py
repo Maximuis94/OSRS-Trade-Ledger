@@ -5,11 +5,10 @@ from concurrent import futures
 from datetime import datetime
 from tkinter import ttk
 
-from gui.component._listbox.button_header import ButtonHeader
-from gui.frames.navigation_frame import NavigationFrame
+from gui_ledger.frames.navigation_frame import NavigationFrame
 from gui.component.button import GuiButton
 from gui.base.frame import TkGrid, GuiFrame
-from gui.component.event_bindings import EventBinding, lmb
+from gui.util.event_binding import lmb
 from gui.component.label import GuiLabel
 from gui.util.constants import letters
 from util.gui_formats import rgb_to_colorcode
@@ -111,7 +110,7 @@ class GraphicalUserInterface(tk.Frame):
             {"tag": tag, "button_text": text, "command_kwargs": {"method_id": text}} for tag, text in
             zip(letters, ["Inventory", "Results/day", "Item prices", "Overall results", "Import data"])
         ]
-        self.buttons = [GuiButton(**{**kw, **common_kwargs}) for kw in kws]
+        self.buttons = [GuiButton(self.frame, **{**kw, **common_kwargs}) for kw in kws]
         self.button_column.grid(**self.frame.get_grid_kwargs(self.button_column.tag))
     
     def button_column_press(self, **kwargs):

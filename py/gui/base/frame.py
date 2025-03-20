@@ -1,415 +1,585 @@
 """
-Module with base Frame definition used throughout the project.
-The Frame is an augmented version of the ttk.Frame; it uses an underlying grid that is used to dictate how frames
-should be organized.
+Module: gui_base_frame.py
+===========================
+This module provides the fundamental classes for managing GUI frames and layouts.
 
+Classes
+-------
+TkGrid : Grid layout manager that parses a sequence of strings into widget placement dimensions.
+LayoutManager : Dedicated manager that wraps TkGrid and exposes a simplified API for grid operations.
+GuiFrame : Wrapper around ttk.Frame that integrates layout management, event binding, and Tk variable handling.
 """
-import time
-import tkinter as tk
-import warnings
-from collections import namedtuple
 from collections.abc import Callable
-from tkinter import ttk
-from typing import Sequence, Tuple, Dict, List
 
-from gui.component.event_bindings import EventBinding
-from gui.util.constants import Alignment, letters
-from util.data_structures import remove_dict_entries
+import tkinter as tk
+import tkinter.ttk as ttk
+from collections import namedtuple
 
+from multipledispatch import dispatch
+from typing import Sequence, Any, Dict, Tuple, List
+
+from gui.util.event_binding import EventBinding
+
+# Define a namedtuple for widget dimensions.
 WidgetDimensions = namedtuple('WidgetDimensions', ['column', 'row', 'columnspan', 'rowspan'])
 
-
-
-
+# Define any illegal characters for tag processing.
 ILLEGAL_CHARACTERS = ""
 
 
 class TkGrid:
     """
-    CLass used to automatically assign widgets column/row numbers/spans
-    
+    Grid layout manager that parses a sequence of strings into widget placement dimensions.
+
+    Parameters
+    ----------
+    grid : sequence of str
+        A sequence of strings where each string represents one row of the layout.
+        Each character corresponds to a widget's tag.
+
+    Attributes
+    ----------
+    grid : sequence of str
+        The original grid layout.
+    grid_1d : str
+        The flattened grid (all rows concatenated).
+    widgets : dict
+        Mapping from widget tag (str) to its dimensions (WidgetDimensions).
+    width : int
+        The number of columns in the grid (inferred from the first row).
+    height : int
+        The number of rows in the grid.
+    unique_tags : str
+        A string of unique tags found in the grid, ordered left-to-right, top-to-bottom.
+
+    Raises
+    ------
+    ValueError
+        If a tag is not found or rows are inconsistent in length.
+
+    Examples
+    --------
+    >>> grid_layout = ["AAABBB", "AAABBB", "CCCDDD"]
+    >>> tg = TkGrid(grid_layout)
+    >>> tg.widgets['A']
+    WidgetDimensions(column=0, row=0, columnspan=3, rowspan=2)
     """
-    
-    __slots__ = '_unique_tags', 'grid', 'grid_1d', 'widgets', 'width', 'height', '_row_length'
-    
-    _unique_tags: str
-    """String that consists of all tags encountered in `grid`, from left to right, top to bottom"""
-    
-    grid: Sequence[str]
-    grid_1d: str
-    _row_length: int
-    widgets: Dict[str, WidgetDimensions]
-    width: int
-    height: int
-    
-    ILLEGAL_TAGS: str = "* "
-    
+    __slots__ = ('grid', 'grid_1d', 'widgets', 'width', 'height', '_row_length', '_unique_tags')
+
     def __init__(self, grid: Sequence[str]):
+        self.grid = grid
+        self._unique_tags = ""
+        self.flatten_grid()
+        self.widgets = {}
+        self.width = len(grid[0]) if grid else 0
+        self.height = len(grid)
+        for tag in self.unique_tags:
+            self.parse_grid(tag)
+
+    @property
+    def unique_tags(self) -> str:
         """
-        An alternative approach for representing tk elements in a grid-like fashion
-        Object for automatically creating a grid-like representation for tkinter elements. The input is a list of Y
-        strings of length X, tkinter elements are tagged with single characters (e.g. ['AABB', 'CCCC']). A grid-like
-        representation is derived from this list of strings, in which each string within the list represents a row and
-        the amount of characters per row can be derived to the width of the smallest atom.
-        There is also a wild-card character * that can be used for filling unassigned spaces.
+        Unique widget tags in the grid.
+
+        Returns
+        -------
+        str
+            A string of unique tags (ordered left-to-right, top-to-bottom).
+        """
+        return self._unique_tags
+
+    @unique_tags.setter
+    def unique_tags(self, grid_str: str):
+        """
+        Set the unique tags after stripping illegal characters.
 
         Parameters
         ----------
-        grid : list
-            List of Y strings of equal length X, where identical characters dictate how much space is assigned to this
-            tag
+        grid_str : str
+            The flattened grid string.
 
-        Attributes
+        Raises
+        ------
+        TypeError
+            If grid_str is not a string.
+        """
+        if not isinstance(grid_str, str):
+            raise TypeError(f"unique_tags must be a string, got {type(grid_str)}")
+        self._unique_tags = self._strip_illegal_tags(grid_str)
+
+    def flatten_grid(self) -> None:
+        """
+        Flatten the 2D grid into a single 1D string while preserving order.
+        """
+        self.grid_1d = "".join(self.grid)
+        self._row_length = len(self.grid_1d) // len(self.grid) if self.grid else 0
+        self.unique_tags = self.grid_1d
+
+    def _strip_illegal_tags(self, grid_str: str) -> str:
+        """
+        Remove illegal characters from the grid string.
+
+        Parameters
         ----------
-        grid : dict
-            A dict with a key for each single character tag passed in the input list of strings. Each dict contains a
-            (x, y) tuple and a (w, h) tuple.
+        grid_str : str
+            The grid string to process.
 
-        Methods
+        Returns
         -------
-        get_dims(tag: str) -> WidgetDimensions
-            Get the parsed dimensions for widget `tag`
+        str
+            The processed string with illegal characters removed.
+        """
+        seen = set()
+        return ''.join(ch for ch in grid_str if ch not in ILLEGAL_CHARACTERS and ch not in seen and not seen.add(ch))
+
+    def parse_grid(self, tag: str) -> None:
+        """
+        Parse the grid to determine the dimensions of a widget with the given tag.
+
+        Parameters
+        ----------
+        tag : str
+            The widget tag to locate in the grid.
 
         Raises
         ------
         ValueError
-            A ValueError will be raised if the strings within the list have varying lengths.
+            If the tag is not found in the grid.
 
         Notes
         -----
-        Given a row of AAABB, 3/5th of the space will be assigned to tk widget A on the left, and the remaining 2/5th
-        to tk widget B on the right. This system was implemented to automatically assign proper X, Y, W and H
-        coordinates, without having to tweak coordinates/dimensions for individual widgets. Note that each abstract
-        object defined below can accept a TkGrid object used to derive its coordinates and size without having to
-        explicitly define each one of them.
-        
-        See Also
-        --------
-        https://anzeljg.github.io/rin2/book2/2405/docs/tkinter/grid-methods.html
-            Additional information on getting/setting tk grid properties.
-        
+        The method calculates the starting row and column, as well as the column span and row span,
+        and stores the dimensions as a WidgetDimensions tuple in the widgets attribute.
         """
-        self.grid = grid
-        self.flatten_grid()
-        self.widgets = {}
-        
-        self.width = len(grid[0])
-        self.height = len(grid)
-        
-        for tag in self.tags:
-            self.parse_grid(tag)
-    
-    @property
-    def tags(self) -> str:
-        """A set of tags that can be found within the grid. They are ordered from left to right and top to bottom."""
-        return self._unique_tags
-    
-    @tags.setter
-    def tags(self, grid_layout_1d: str):
-        if isinstance(grid_layout_1d, str):
-            self._unique_tags = self._strip_illegal_tags(grid_layout_1d)
-        else:
-            msg = f"grid_layout is expected to be a string. However, it is passed as {type(grid_layout_1d)}"
-            raise TypeError(msg)
-        
-    def parse_grid(self, tag: str):
-        """ Parse the grid to identify the dimensions of `tag`, store the values as a WidgetDimensions tuple """
-        w, h, x, y, n = None, None, None, None, None
-        for _y, bar in enumerate(self.grid):
-            if n is None:
-                n = len(bar)
-            elif len(bar) != n:
-                raise ValueError(f'The amount of characters in row {y} does not match the amount of characters in '
-                                 f'preceding rows. All rows should be equally sized.')
-            if tag in bar and w is None:
-                w = bar.count(tag)
-                x = bar.index(tag)
-                y = _y
-                h = 1
-            elif tag in bar and y is not None:
-                h += 1
-            elif tag not in bar and y is not None:
+        start_row, start_col, colspan, rowspan = None, None, 0, 0
+        for row_index, row in enumerate(self.grid):
+            if tag in row:
+                if start_row is None:
+                    start_row = row_index
+                    start_col = row.index(tag)
+                    colspan = row.count(tag)
+                    rowspan = 1
+                else:
+                    rowspan += 1
+            elif start_row is not None:
                 break
-        self.widgets[tag] = WidgetDimensions(x, y, w, h)
-    
-    def get_dims(self, tag, padx: int = None, pady: int = None, sticky: str = None, **kwargs) -> Dict[str, int]:
-        """ Get the dimensions for widget `tag`. Output can be given to ttk.grid() as kwargs"""
-        if self.widgets.get(tag) is None:
-            msg = f"Unable to find tag {tag} in this grid. Valid tags are: {', '.join(self.widgets)}"
-            raise ValueError(msg)
-        
-        output = self.widgets.get(tag)._asdict()
-        output.update({'padx': padx, 'pady': pady, 'sticky': sticky})
-        return output
-    
+        if start_row is None:
+            raise ValueError(f"Tag '{tag}' not found in grid.")
+        self.widgets[tag] = WidgetDimensions(column=start_col, row=start_row,
+                                               columnspan=colspan, rowspan=rowspan)
+
+    def get_dims(self, tag: str, **kwargs) -> Dict[str, Any]:
+        """
+        Get grid keyword arguments for a widget with the given tag.
+
+        Parameters
+        ----------
+        tag : str
+            The widget tag.
+        **kwargs : dict
+            Additional grid options (e.g., padx, pady, sticky).
+
+        Returns
+        -------
+        dict
+            A dictionary of grid parameters suitable for the grid() method.
+
+        Raises
+        ------
+        ValueError
+            If the tag is not found in the grid.
+        """
+        if tag not in self.widgets:
+            valid = ", ".join(self.widgets.keys())
+            raise ValueError(f"Tag '{tag}' not found. Valid tags: {valid}")
+        dims = self.widgets[tag]._asdict()
+        dims.update(kwargs)
+        return dims
+
     def has_tag(self, tag: str) -> bool:
-        """ Return True if `tag` exists within the underlying grid layout """
-        return self.widgets.get(tag) is not None
-    
+        """
+        Check if a given tag exists in the grid.
+
+        Parameters
+        ----------
+        tag : str
+            The widget tag to check.
+
+        Returns
+        -------
+        bool
+            True if the tag exists, False otherwise.
+        """
+        return tag in self.widgets
+
     @staticmethod
-    def generic_layout(n_widgets: int, alignment: Alignment) -> Tuple[str, ...]:
-        """ Return a grid layout of `n_widgets` equally sized widgets aligned as a horizontal or vertical bar """
-        try:
-            if alignment == Alignment.VERTICAL:
-                return tuple((c for c in letters[:n_widgets]))
-            elif alignment == Alignment.HORIZONTAL:
-                return tuple([letters[:n_widgets]])
-            raise ValueError("Invalid input value for `alignment`; it can be Alignment.VERTICAL or Alignment.HORIZONTAL")
-        except IndexError as e:
-            if n_widgets > len(letters):
-                raise IndexError("Amount of widgets is not allowed to exceed 52")
-            raise e
-    
-    def _strip_illegal_tags(self, grid_1d: str) -> str:
-        """Return `string` with all illegal tags removed as an ordered, single string"""
-        seen = set()
-        return ''.join(
-            char for char in grid_1d
-            if char not in self.ILLEGAL_TAGS and char not in seen and not seen.add(char))
-    
-    def flatten_grid(self):
-        """Compress the 2d string grid into a single 1d string without any loss of information."""
-        self.grid_1d = "".join(self.grid)
-        self._row_length = len(self.grid_1d) // len(self.grid)
-        self.tags = self.grid_1d
+    def generic_layout(n_widgets: int, alignment: str) -> Tuple[str, ...]:
+        """
+        Generate a generic layout for a given number of widgets.
+
+        Parameters
+        ----------
+        n_widgets : int
+            The number of widgets.
+        alignment : str
+            The layout orientation; must be 'vertical' or 'horizontal'.
+
+        Returns
+        -------
+        tuple of str
+            A tuple representing the grid layout.
+
+        Raises
+        ------
+        ValueError
+            If an invalid alignment is provided.
+
+        Examples
+        --------
+        >>> TkGrid.generic_layout(3, 'horizontal')
+        ('abc',)
+        >>> TkGrid.generic_layout(3, 'vertical')
+        ('a', 'b', 'c')
+        """
+        from gui.util.constants import letters  # Assumes letters is defined externally.
+        if alignment.lower() == 'vertical':
+            return tuple(letters[:n_widgets])
+        elif alignment.lower() == 'horizontal':
+            return (letters[:n_widgets],)
+        else:
+            raise ValueError("Invalid alignment. Use 'vertical' or 'horizontal'.")
+
+
+class LayoutManager:
+    """
+    Dedicated layout manager that encapsulates grid operations.
+
+    Parameters
+    ----------
+    grid : TkGrid
+        An instance of TkGrid defining the layout.
+
+    Attributes
+    ----------
+    unique_tags : str
+        Unique tags from the underlying grid.
+    width : int
+        The grid's width (number of columns).
+    height : int
+        The grid's height (number of rows).
+    """
+    __slots__ = ("_grid",)
+
+    def __init__(self, grid: TkGrid):
+        self._grid = grid
+
+    @property
+    def unique_tags(self) -> str:
+        """
+        Unique tags from the underlying grid.
+
+        Returns
+        -------
+        str
+            A string of unique widget tags.
+        """
+        return self._grid.unique_tags
+
+    @property
+    def width(self) -> int:
+        """
+        Grid width (number of columns).
+
+        Returns
+        -------
+        int
+            The width of the grid.
+        """
+        return self._grid.width
+
+    @property
+    def height(self) -> int:
+        """
+        Grid height (number of rows).
+
+        Returns
+        -------
+        int
+            The height of the grid.
+        """
+        return self._grid.height
+
+    def get_grid_kwargs(self, tag: str, **kwargs) -> Dict[str, Any]:
+        """
+        Get grid keyword arguments for placing a widget with a given tag.
+
+        Parameters
+        ----------
+        tag : str
+            The widget tag.
+        **kwargs : dict
+            Additional grid options.
+
+        Returns
+        -------
+        dict
+            A dictionary of grid parameters.
+        """
+        return self._grid.get_dims(tag, **kwargs)
 
 
 class GuiFrame:
     """
-    Wrapper class for the ttk.Frame class. It serves as a basis for almost all tk-related implementations within this
-    project. Rather than being a subclass of ttk.Frame, it has a ttk.Frame attribute, aside from its own functionality.
-    
-    Although it is not necessarily required to extend this class, it may be desirable if the class represents a GuiFrame
-    with a set of widgets on it.
-    
-    This class enforces very elementary behaviours that are applicable to the majority, if not all, GUI classes within
-    the project. Modifying it can
+    Wrapper around ttk.Frame that integrates layout management and event bindings.
+
+    Parameters
+    ----------
+    parent : tk.Widget
+        The parent widget.
+    grid_layout : sequence of str or TkGrid
+        The layout definition as a sequence of strings or a TkGrid instance.
+    **kwargs
+        Additional options passed to ttk.Frame.
+
+    Attributes
+    ----------
+    _frame : ttk.Frame
+        The underlying ttk.Frame.
+    _layout_manager : LayoutManager
+        The layout manager used for grid operations.
+    event_bindings : list of tuple
+        A list of event binding pairs (event, callback).
+    tag : str
+        An optional tag identifier for the frame.
     """
-    __slots__ = "width", "height", "_grid", "event_bindings", "_tkinter_variable_dict", "_frame", "_text", "pady", "tag"
-    _frame: ttk.Frame
-    """The underlying ttk.Frame instance on which the widgets are built"""
-    
-    _grid: TkGrid
-    """The underlying TkGrid that dictates row/column span/indices for each widget"""
-    
-    _grid_args: Tuple = ("column", "columnspan", "row", "rowspan", "in", "ipadx", "ipady", "padx", "pady", "sticky")
-    tag: str
-    _text: tk.StringVar
-    
-    def __init__(self, parent, grid_layout: Sequence[str] | TkGrid, *args, **kwargs):
-        if kwargs.get('tag') is not None:
-            self.tag = kwargs.pop('tag')
-        
-        self._frame = ttk.Frame(parent, *args, **kwargs)
-        # super().__init__(parent, *args, **kwargs)
-        if not hasattr(self, 'width'):
-            self.width: int = self._frame.winfo_width()
-        if not hasattr(self, 'height'):
-            self.height: int = self._frame.winfo_height()
-        self._grid = grid_layout if isinstance(grid_layout, TkGrid) else TkGrid(grid_layout)
-        self._tkinter_variable_dict = {}
-    
-    def init_widget_start(self, tag: str, text: str = None, text_variable: tk.StringVar = None, **kwargs):
-        """ Method that is to be called before initializing the superclass in the subclass __init__() """
-        self.tag = tag
-        
-        if text_variable is None:
-            try:
-                self._text = tk.StringVar(kwargs.get('frame', self._frame), text)
-            except AttributeError:
-                self._text = tk.StringVar()
+    __slots__ = ("_frame", "_layout_manager", "_tk_vars", "event_bindings", "tag")
+
+    def __init__(self, parent: tk.Widget, grid_layout: Sequence[str] or TkGrid, **kwargs):
+        self.tag = kwargs.pop('tag', '')
+        self._frame = ttk.Frame(parent._frame if hasattr(parent, "_frame") else parent, **kwargs)
+        self.event_bindings: List[EventBinding] = []
+        self._tk_vars = {}
+        if isinstance(grid_layout, TkGrid):
+            grid = grid_layout
         else:
-            if text is not None:
-                text_variable.set(text)
-            self._text = text_variable
-        
-        kwargs = self._set_padding(**kwargs)
-    
-    def get_widget_dimensions(self, tag: str) -> Tuple[int, int]:
-        """ Returns the width and height of the widget associated with `tag` in the widget layout. """
-        try:
-            d = self._grid.widgets[tag]
-            return int((d.w / self._grid.width) * self.width), int((d.h / self._grid.height) * self.height)
-        except KeyError:
-            e = f"Tag '{tag}' does not exist within this grid layout;\n\t"
-            e += "\n\t".join(self._grid.grid)
-            raise ValueError(e)
-    
-    def get_grid_kwargs(self, widget_tag: str, **kwargs) -> Dict[str, any]:
+            grid = TkGrid(grid_layout)
+        self._layout_manager = LayoutManager(grid)
+
+    @property
+    def frame(self) -> ttk.Frame:
         """
-        Returns a kwargs dict that can be passed directly to Widget.grid(). Extra kwargs passed will be added to the
-        returned dict, which can in turn be passed on to the grid() call, provided that kwarg is accepted by grid().
+        Public accessor for the underlying ttk.Frame.
+
+        Returns
+        -------
+        ttk.Frame
+            The underlying frame.
+        """
+        return self._frame
+
+    @property
+    def layout_manager(self) -> LayoutManager:
+        """
+        Public accessor for the layout manager.
+
+        Returns
+        -------
+        LayoutManager
+            The layout manager instance.
+        """
+        return self._layout_manager
+
+    def init_widget_start(self, tag: str, text: str = None,
+                          text_variable: tk.StringVar = None, **kwargs) -> tk.StringVar:
+        """
+        Prepare widget initialization by setting a tag and initializing a text variable.
+
+        Parameters
+        ----------
+        tag : str
+            The widget tag.
+        text : str, optional
+            The initial text value.
+        text_variable : tk.StringVar, optional
+            A pre-existing StringVar to use.
+        **kwargs : dict
+            Additional options (e.g., padding).
+
+        Returns
+        -------
+        tk.StringVar
+            The text variable to be used by the widget.
+        """
+        self.tag = tag
+        text_var = tk.StringVar(self._frame, value=text) if text_variable is None else text_variable
+        self._set_padding(**kwargs)
+        return text_var
+
+    def get_widget_dimensions(self, tag: str) -> Tuple[int, int]:
+        """
+        Compute the pixel dimensions of a widget based on the grid layout.
+
+        Parameters
+        ----------
+        tag : str
+            The widget tag.
+
+        Returns
+        -------
+        tuple of int
+            A tuple (width, height) representing the widget's dimensions in pixels.
+
+        Raises
+        ------
+        ValueError
+            If the tag is not found in the grid.
+        """
+        dims = self._layout_manager._grid.widgets.get(tag)
+        if dims is None:
+            raise ValueError(f"Tag '{tag}' not found in grid:\n" +
+                             "\n".join(self._layout_manager._grid.grid))
+        width = int((dims.columnspan / self.layout_manager.width) * self._frame.winfo_width())
+        height = int((dims.rowspan / self.layout_manager.height) * self._frame.winfo_height())
+        return width, height
+
+    def get_grid_kwargs(self, widget_tag: str, **kwargs) -> Dict[str, Any]:
+        """
+        Retrieve grid keyword arguments for placing a widget based on its tag.
 
         Parameters
         ----------
         widget_tag : str
-            The tag assigned to the widget that will call the grid() method
-
-        Other Parameters
-        ----------------
-        pad : int or None or Tuple[int or None, int or None], optional, None by default
-            A tuple that describes the padding in pixels that is to be applied. 1 value will be applied vertically and
-             horizontally; 2 values define horizontal and vertical padding, respectively.
-            These values will be translated to padx and pady.
-        ipad: int or None or Tuple[int or None, int or None], optional, None by default
-            Same as padding, but applies to internal padding instead. These values will be translated to ipadx and ipady
-        sticky : str, optional, None by default
-            The sticky arg to pass to the grid call. Dictates to which side the widget will 'stick'. Can be composed of
-            multiple characters (e.g. EW indicates it should stick to both eastern and western side).
-            The string passed here should consist of the following characters; N, E, S, W. It may also be an empty str,
-            in which case it will be placed in the centre of the cell.
+            The widget tag.
+        **kwargs : dict
+            Additional grid options (e.g., padding).
 
         Returns
         -------
-        Dict[str, any]
-            A keyword-args dict that can be passed on to grid()
+        dict
+            A dictionary of grid parameters.
+        """
+        # Process shorthand for padding.
+        if 'pad' in kwargs:
+            pad_val = kwargs.pop('pad')
+            if isinstance(pad_val, (int, float)):
+                kwargs['padx'] = kwargs['pady'] = pad_val
+            elif isinstance(pad_val, (tuple, list)) and len(pad_val) >= 2:
+                kwargs['padx'], kwargs['pady'] = pad_val[:2]
+        if 'ipad' in kwargs:
+            ipad_val = kwargs.pop('ipad')
+            if isinstance(ipad_val, (int, float)):
+                kwargs['ipadx'] = kwargs['ipady'] = ipad_val
+            elif isinstance(ipad_val, (tuple, list)) and len(ipad_val) >= 2:
+                kwargs['ipadx'], kwargs['ipady'] = ipad_val[:2]
+        return self._layout_manager.get_grid_kwargs(widget_tag, **kwargs)
 
+    def _set_padding(self, **kwargs) -> None:
         """
-        
-        if len(widget_tag) != 1:
-            raise ValueError("widget_tag has to be of length 1")
-        elif widget_tag not in self._grid.tags:
-            raise ValueError(f"The underlying TkGrid does not have a tag for {widget_tag}")
-        
-        try:
-            value = kwargs.get('pad')
-            if isinstance(value, int):
-                kwargs.update({'padx': value, 'pady': value})
-            elif isinstance(value, tuple):
-                if value[0] is not None:
-                    kwargs['padx'] = value[0]
-                if value[1] is not None:
-                    kwargs['pady'] = value[1]
-            del kwargs['pad']
-        except KeyError:
-            ...
-        
-        try:
-            value = kwargs['ipad']
-            if isinstance(value, int):
-                kwargs.update({'ipadx': value, 'ipady': value})
-            elif isinstance(value, tuple):
-                if value[0] is not None:
-                    kwargs['ipadx'] = value[0]
-                if value[1] is not None:
-                    kwargs['ipady'] = value[1]
-            del kwargs['ipad']
-        except KeyError:
-            ...
-        
-        kwargs.update(self._grid.get_dims(widget_tag, **kwargs))
-        
-        return {k: kwargs[k] for k in frozenset(self._grid_args).intersection(kwargs.keys())}
-    
-    def _set_padding(self, **kwargs):
-        """ Set x- and y-padding for this Widget, either via padxy as a tuple, or padx and pady separately """
-        keys = frozenset(('padxy', 'padx', 'pady')).intersection(tuple(kwargs.keys()))
-        # print(kwargs, keys)
-        if len(keys) > 0:
-            for next_pad in frozenset(('padxy', 'padx', 'pady')).intersection(kwargs):
-                value = kwargs.get(next_pad)
-                if value is not None:
-                    if next_pad == 'padxy':
-                        self._frame.padx, self._frame.pady = value
-                        break
-                    else:
-                        self._frame.__setattr__(next_pad, value)
-            kwargs = remove_dict_entries(_dict=kwargs, keys=keys)
-        return kwargs
-    
-    def _set_bindings(self, event_bindings: List[Tuple[str, Callable]] = None):
-        if event_bindings is not None:
-            self.event_bindings += event_bindings
-        
-        for trigger, command in self.event_bindings:
-            self._frame.bind(trigger, command)
-    
-    def add_tk_var(self, var: tk.Variable, key: str, value: any = None):
-        if value is not None:
-            var.set(value)
-        self._tkinter_variable_dict[key] = var
-    
-    # def set_event_bindings(self, bindings: List[tuple] = None, replace_bindings: bool = True):
-    def set_event_bindings(self, event_bindings: List[Tuple[str, Callable] or EventBinding] = None,
-                           replace_bindings: bool = True):
-        """
-        Iterate over the configured event bindings list and bind them. If additional bindings are supplied, append them
-        to the existing list or replace the existing bindings with them.
+        Set padding options on the underlying frame.
 
         Parameters
         ----------
-        event_bindings : List[tuple], optional, None by default
-            An Iterable with tuples that specify an event listener and the command to execute if the event triggers.
-        replace_bindings : bool, optional, True by default
-            Flag that dictates whether `bindings` will replace self.event_bindings, or whether it will be added to it.
+        **kwargs : dict
+            Padding options such as 'padxy', 'padx', and 'pady'.
+        """
+        for key in ('padxy', 'padx', 'pady'):
+            if key in kwargs:
+                setattr(self._frame, key, kwargs[key])
 
-        Returns
-        -------
+    def set_event_bindings(self, event_bindings: Sequence[Tuple[str, Callable]] = None, replace: bool = True) -> None:
+        """
+        Set or replace event bindings on the underlying frame.
 
+        Parameters
+        ----------
+        event_bindings : sequence of tuple, optional
+            A sequence of (event, callback) pairs.
+        replace : bool, optional
+            If True, replace existing bindings; otherwise, add to them.
         """
         if event_bindings is not None:
-            self.event_bindings += event_bindings
+            self.event_bindings = list(event_bindings) if replace else self.event_bindings + list(event_bindings)
+        for trigger, callback in self.event_bindings:
+            self._frame.bind(trigger, callback)
+
+    def add_tk_var(self, var: tk.Variable, key: str, value: Any = None) -> None:
+        """
+        Register a Tkinter variable in the frame's internal dictionary.
+
+        Parameters
+        ----------
+        var : tk.Variable
+            The Tkinter variable to register.
+        key : str
+            The key under which to register the variable.
+        value : any, optional
+            An optional value to set for the variable.
+        """
+        if value is not None:
+            var.set(value)
+        self._tk_vars[key] = var
+    
+    def grid(self, *args, **kwargs):
+        """Method that calls the grid() method of the Frame"""
+        self._frame.grid(*args, **kwargs)
+    
+    # @dispatch(GuiFrame, str, any, str)
+    def bind_event(self, event: str, callback: Callable, description: str = ""):
+        """
+        Bind an event to the underlying Tk widget and record the binding.
+
+        Parameters
+        ----------
+        event : str
+            The event sequence to bind (e.g., "<Button-1>", "<Enter>", etc.).
+        callback : Callable
+            The callback function to execute when the event occurs.
+        description : str, optional, "" by default
+            The description that will be added to the event binding
+        """
         
-        for trigger, command in self.event_bindings:
-            self._frame.bind(trigger, command)
-        if isinstance(event_bindings, list) and len(event_bindings[0]) == 2:
-            self.event_bindings = event_bindings if replace_bindings else self.event_bindings + event_bindings
-        
-        for next_binding in self.event_bindings:
-            try:
-                if isinstance(next_binding, EventBinding):
-                    self._frame.bind(next_binding.tag.value(), next_binding.callback)
-            except AttributeError:
-                self._frame.bind(next_binding[0], next_binding[1])
+        self._frame.bind(event, callback)
+        self.event_bindings.append(EventBinding(event, callback, description))
     
-    def configure(self, *args, **kwargs):
-        """Make a call to ttk.Frame.configure(), passing along any args provided"""
-        self._frame.configure(*args, **kwargs)
+    # @dispatch(EventBinding)
+    def bind_event(self, event_binding: EventBinding):
+        """
+        Bind an event to the underlying Tk widget and record the binding.
+
+        Parameters
+        ----------
+        event_binding : EventBinding
+            EventBinding with all information needed
+        """
+        self._frame.bind(*event_binding.bind_args)
+        self.event_bindings.append(event_binding)
     
-    # region self._frame attribute relay methods -- properties that relay a call to the _frame attribute
-    @property
-    def tk(self):
-        """tk attribute of the underlying ttk.Frame"""
-        return self._frame.tk
+    # @dispatch(str)
+    def unbind_event(self, event: str):
+        """
+        Unbind all callbacks associated with the given event from the underlying Tk widget.
+
+        Parameters
+        ----------
+        event : str
+            The event sequence to unbind (e.g., "<Button-1>").
+        """
+        self._frame.unbind(event)
+        self.event_bindings = [b for b in self.event_bindings if b[0] != event]
     
-    @property
-    def children(self):
-        """children attribute of the underlying ttk.Frame"""
-        return self._frame.children
+    # @dispatch(EventBinding)
+    def unbind_event(self, event: EventBinding):
+        """
+        Unbind all callbacks associated with the given event from the underlying Tk widget.
+
+        Parameters
+        ----------
+        event : str
+            The event sequence to unbind (e.g., "<Button-1>").
+        """
+        self._frame.unbind(event.event)
+        self.event_bindings.remove(event)
     
-    @property
-    def master(self):
-        """master attribute of the underlying ttk.Frame"""
-        return self._frame.master
-    
-    @property
-    def widgetName(self):
-        """widgetName attribute of the underlying ttk.Frame"""
-        return self._frame.widgetName
-    
-    @property
-    def _last_child_ids(self):
-        """_last_child_ids attribute of the underlying ttk.Frame"""
-        return self._frame._last_child_ids
-    
-    @_last_child_ids.setter
-    def _last_child_ids(self, value):
-        """_last_child_ids attribute of the underlying ttk.Frame"""
-        self._frame._last_child_ids = value
-    
-    @property
-    def _w(self):
-        """_w attribute of the associated ttk.Frame"""
-        return self._frame._w
-    
-    @property
-    def _root(self):
-        """_root attribute of the associated ttk.Frame"""
-        return self._frame._root
-    
-    @property
-    def grid(self):
-        """grid attribute of the associated ttk.Frame"""
-        return self._frame.grid
-    
-    # endregion
+    def destroy(self):
+        """Call to the destroy method of the underlying Frame"""
+        self._frame.destroy()

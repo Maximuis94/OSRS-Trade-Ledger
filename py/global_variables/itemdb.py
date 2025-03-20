@@ -16,8 +16,7 @@ from backend.download import realtime_prices
 from file.file import File
 from global_variables import path as gp
 from global_variables.classes import SingletonMeta
-from global_variables.data_classes import Item
-
+from common.classes.item import Item
 
 ITEM_DB_FILE: File = gp.f_db_item
 ITEM_DB_TABLE: str = "item"
@@ -139,12 +138,16 @@ class _ItemDb(metaclass=SingletonMeta):
 itemdb = _ItemDb()
 """Singleton instance of the ItemDb; import and use this instead of ItemDb"""
 
-__all__ = ["itemdb", "Item"]
+__all__ = ["itemdb"]
 
 
 if __name__ == '__main__':
     i = itemdb["Cannonball"]
-    print(i.__repr__())
-    print(i.sqlite_columns())
-    exit(1)
+    print([i.item_id for i in itemdb._items if isinstance(i, Item) and i.equipable])
+    print([i.item_name for i in itemdb._items if isinstance(i, Item) and i.equipable])
+    
+    
+    # print(i.__repr__())
+    # print(i.sqlite_columns())
+    # exit(1)
     

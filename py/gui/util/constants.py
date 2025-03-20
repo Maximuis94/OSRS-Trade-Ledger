@@ -7,11 +7,23 @@ from enum import Enum
 import tkinter as tk
 from typing import Dict, Tuple, Type
 
+from gui.util.font import FontFamily, FontSize, Font
+
 empty_tuple: Tuple = ((),)[0]
 """A tuple with no elements in it"""
 
 letters: str = "abcdefghijklmnopqrstuwvxyzABCDEFGHIJKLMNOPQRSTUWVXYZ"
 """All lower- and upper-case letters sorted alphabetically. """
+
+grid_args = "column", "columnspan", "row", "rowspan", "in", "ipadx", "ipady", "padx", "pady", "sticky"
+"""Names of args that can be passed to grid()"""
+
+
+default_font = Font(FontSize.NORMAL, FontFamily.CONSOLAS)
+"""Font that is to be applied by default"""
+
+tooltip_font = Font(FontSize.NORMAL, FontFamily.SEGOE_UI)
+"""Font displayed by default by tooltips"""
 
 
 TK_VAR_MAPPING: Dict[Callable, Callable[[tk.Frame, any, str], tk.Variable]] = {

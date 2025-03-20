@@ -23,6 +23,7 @@ class Configuration(NamedTuple):
     function: Callable[[Sequence[IRow]], Sequence[IRow]]
     """Function that applies this configuration to a set of rows"""
 
+
 class ListboxConfiguration:
     """
     Class that captures a set of configurations that can be applied to a particular Listbox.
@@ -30,4 +31,4 @@ class ListboxConfiguration:
     
     def __init__(self, configurations: Sequence[Configuration]):
         for c in configurations:
-            
+            ...

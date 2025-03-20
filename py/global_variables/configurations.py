@@ -66,24 +66,6 @@ timespan_target_prices_eval = 3
 
 
 
-###########################################################################
-# Graph-related configurations
-###########################################################################
-
-
-# Timeseries plots fixed intervals in seconds; distance in seconds between vertical grey lines
-vplot_intervals = (300, 900, 3600, 14400, 43200, 86400, 259200, 604800, 1209600, 2419200, 7257600)
-
-
-dow_colors = [
-    (200, 140, 230-30*dow_id) for dow_id in range(7)
-]
-
-# TODO add default order of colors to use for graphs
-default_graph_colors = [
-    (),
-]
-
 
 ###########################################################################
 # Local file configurations
@@ -107,19 +89,6 @@ TableTransform = namedtuple('TableTransform', tt_args)
 
 _src_ts, _src_local = gp.f_db_timeseries, gp.f_db_transaction
 _dst = gp.f_db_archive
-
-# Transfer from active db to archive db
-archive_transfer = {
-    'item': RowTransfer(src_db=_src_ts, src_t='itemdb', dst_db=_dst, dst_t='item', convert=None),
-    'transaction': RowTransfer(src_db=_src_local, src_t='transactions',
-                               dst_db=_dst, dst_t='transaction', convert=None),
-    'avg5m': RowTransfer(src_db=_src_ts, src_t='avg5m', dst_db=_dst, dst_t='avg5m', convert=None),
-    'realtime': RowTransfer(src_db=_src_ts, src_t='realtime',
-                            dst_db=_dst, dst_t='realtime', convert=None),
-    'wiki': RowTransfer(src_db=_src_ts, src_t='wiki', dst_db=_dst, dst_t='wiki', convert=None),
-}
-archive_transfer_local = ['item', 'transaction']
-archive_transfer_timeseries = ['avg5m', 'realtime', 'wiki']
 
 
 ###########################################################################
@@ -152,16 +121,3 @@ npy_db_index = {
     'wiki': [('wiki_ts_itemid', ['timestamp', 'item_id'])],
     'transaction': [('transaction_item_id', 'item_id'), ('transaction_ts_item_id', ['timestamp', 'item_id'])]
 }
-
-
-def _debug_print(msg: str):
-    print(msg)
-
-
-# def np_ar_include_lifetime_profit(profit: int, min_lifetime_profit: int = 5 * pow(10, 7), **kwargs) -> bool:
-#     """ Include an item in array updates if its total profits exceed `min_lifetime_profit` """
-#     return profit >= min_lifetime_profit
-
-if __name__ == "__main__":
-    dbg_prt('hoi')
-    ...

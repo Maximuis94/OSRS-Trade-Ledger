@@ -7,6 +7,7 @@ from overrides import override
 import util.gui as ug
 import util.str_formats as fmt
 from global_variables.classes import SingletonMeta
+from gui.base.widget import GuiWidget
 from gui.component.button import GuiButton
 from tasks.async_task import AsyncTask
 
@@ -45,7 +46,7 @@ class PopUpWindow(tk.Toplevel):
         
         self.proceed = ug.tk_var(True, 'ThreadActive', master=self)
         self.text = 'Tekst'
-        self.var = ug.tk_var(value=self.text, master=self)
+        self.var = GuiWidget.tk_var(value=self.text, master=self)
         self.label = tk.Label(self, textvariable=self.var, font=('Helvetica', 20))
         self.label.grid(row=0, rowspan=1, columnspan=1, column=0)
         self.button = tk.Button(self, text='Start/stop', command=self.start_counter)

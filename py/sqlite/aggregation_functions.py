@@ -48,7 +48,7 @@ class AggregateFunction(abc.ABC):
         self.n_args = -1
         self.columns = ''
         self.agg = agg_class
-        self.table = table
+        self._table = table
         
         self.set_columns(columns)
         
@@ -89,7 +89,7 @@ class AggregateFunction(abc.ABC):
         
         if columns is not None:
             self.set_columns(columns)
-        return self.cursor.execute(f"SELECT {self.name}({self.columns}) FROM main.{self.table} {suffix}")
+        return self.cursor.execute(f"SELECT {self.name}({self.columns}) FROM main.{self._table} {suffix}")
 
 
 class MySum(AggregateFunction):

@@ -7,30 +7,15 @@ The label indicates the current 'mode' the GUI is in
 
 Since this is the realization of the actual GUI, classes are hard-coded.
 """
-import os
 from collections.abc import Callable
-from tkinter.constants import RAISED
-from typing import List, Tuple, Optional
-
-import pandas as pd
-
-import global_variables.path as gp
-import global_variables.osrs as go
-from global_variables.variables import types
+from typing import Tuple, Optional
 
 from gui.base.frame import GuiFrame, TkGrid
 from gui.component.button import GuiButton
-from gui.component.event_bindings import print_event, lmb
 from gui.component.label import GuiLabel
-from gui.component.listbox import GuiListbox
 from gui.frame.button_array import ButtonArray
-from gui.frame.listbox import GuiListboxFrame
-import gui.component._listbox.column as listbox_column
-from gui.component.sort.sort import Sort
 from gui.util.constants import letters, Alignment
 from gui.util.font import Font, FontSize, FontFamily
-from model.database import Database
-
 
 _LABEL_TAG: str = "L"
 """Tag assigned to the label widget"""

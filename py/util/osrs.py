@@ -42,7 +42,7 @@ def check_for_new_items() -> bool:
         print(f'Inserted item data for id={item_id}', row)
         commit_data = True
         con.commit()
-    con.close()
+    # con.close()
     return commit_data
 
 

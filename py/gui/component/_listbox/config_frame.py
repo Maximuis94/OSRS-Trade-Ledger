@@ -15,7 +15,7 @@ Customizing;
 from collections.abc import Sequence
 from dataclasses import dataclass
 
-from gui.objects import ListboxColumn
+from gui.component._listbox.column import ListboxColumn
 
 
 @dataclass(slots=True, match_args=True, )

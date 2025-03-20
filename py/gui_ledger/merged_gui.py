@@ -1,20 +1,13 @@
 """Module with a class that combines all individual elements into a single entity"""
 
-import time
-import tkinter as tk
-from collections.abc import Iterable
 from concurrent import futures
-from datetime import datetime
-from tkinter import ttk
 
-from gui.component._listbox.button_header import ButtonHeader
-from gui_ledger.navigation_frame import NavigationFrame
-from gui.component.button import GuiButton
+import tkinter as tk
+
 from gui.base.frame import TkGrid, GuiFrame
-from gui.component.event_bindings import EventBinding, lmb
-from gui.component.label import GuiLabel
+from gui.component.button import GuiButton
 from gui.util.constants import letters
-from util.gui_formats import rgb_to_colorcode
+from gui_ledger.navigation_frame import NavigationFrame
 
 # from tab_inventory import InventoryFrame
 

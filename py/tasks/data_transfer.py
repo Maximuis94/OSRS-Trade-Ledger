@@ -11,13 +11,8 @@ Updating the database consists of the following steps;
 These steps are implemented below. They are typically combined and executed via an executable script.
 """
 import datetime
-import os
-import shutil
 import sqlite3
-import time
-from os.path import exists
-from traceback import format_list
-from typing import List, Tuple
+from typing import List
 
 import pandas as pd
 
@@ -29,12 +24,12 @@ import sqlite.executable
 import sqlite.row_factories
 import util.file as uf
 import util.str_formats as fmt
-from controller.item import Item, augment_itemdb_entry
-from model.database import sql_create_timeseries_item_table, ROConn
+from common.classes.database import sql_create_timeseries_item_table
+from common.item import Item, augment_itemdb_entry
+from common import ROConn
 from model.timeseries import sql_timeseries_insert
 from sqlite.row_factories import factory_idx0, factory_dict
 from util.logger import prt
-from util.str_formats import delta_t
 
 __t0__ = time.perf_counter()
 
@@ -358,7 +353,6 @@ def parse_item_data(path: str) -> dict:
 def insert_items(start_time: int or float = time.perf_counter()):
     """ Transfer all rows from idb to `db_path` """
     print(f' [{fmt.passed_pc(start_time)}] Updating item data...')
-    import pickle
     count = 0
     db = sqlite3.connect(gp.f_db_local)
     db_from = sqlite3.connect(gp.f_db_rbpi_item)

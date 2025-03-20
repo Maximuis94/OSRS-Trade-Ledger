@@ -1,9 +1,7 @@
 """
-This module contains the model of the inventory
+Old inventory code
 
-# TODO: inventory model / controller -> Shift code to appropriate modules
-    Model: InventoryEntry + Inventory
-    Controller: Inventory
+# TODO: Rework inventory management
 
 """
 import pandas as pd

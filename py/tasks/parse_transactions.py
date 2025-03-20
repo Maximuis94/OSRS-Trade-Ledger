@@ -74,9 +74,7 @@ TODO: Reduce amount of logged transactions (?)
 """
 import json
 import os.path
-import shutil
 import sqlite3
-import time
 from collections.abc import Iterable, Sized
 
 import numpy as np
@@ -88,9 +86,8 @@ import global_variables.osrs as go
 import global_variables.path as gp
 import util.file as uf
 import util.unix_time as ut
-import util.str_formats as fmt
 from util.logger import prt
-from controller.item import remap_item, create_item
+from common.item import remap_item, create_item
 from file.file import File
 from model.item import Item
 from model.transaction import Transaction
@@ -462,7 +459,7 @@ def submit_transaction_queue(queue_file: File = gp.f_exchange_log_queue, submit_
                               min_cooldown=cfg.localdb_backup_cooldown, max_backups=cfg.max_localdb_backups)
         else:
             prt(f"Did not create a new localDB backup, as no new transactions were submitted")
-        db_con.close()
+        # db_con.close()
     
     # Export submissions to a readable csv file
     try:
@@ -597,7 +594,7 @@ def update_transaction_ids(t_id: int, to_db_file: str = gp.f_db_local.replace('.
         c.execute(sql_exe, {'transaction_id': values_dict.get('transaction_id'), 'new_id': t_id})
         t_id += 1
     con.commit()
-    con.close()
+    # con.close()
     print(f'db file {to_db_file} has been updated. Note that this is a temporary copy that should be renamed if the '
           f'updates are ok.')
 
@@ -633,6 +630,8 @@ def parse_logs(post_exe_print: bool = True, t0: int or float = None):
 
 
 if __name__ == '__main__':
+    
+    
     con = sqlite3.connect(gp.f_db_local)
     print(con.execute("SELECT MAX(transaction_id) FROM 'transaction'").fetchone()+1)
     exit(1)

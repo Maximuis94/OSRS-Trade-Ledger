@@ -51,4 +51,3 @@ class Item(ItemModel, IDbEntity):
     @property
     def sqlite_row_factory(self) -> Callable[[sqlite3.Cursor, tuple], any]:
         return lambda c, row: ItemModel(*row)
-

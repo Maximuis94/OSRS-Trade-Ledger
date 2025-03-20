@@ -1,5 +1,5 @@
 from venv_auto_loader.active_venv import *
-from runelite_plugin_scripts.bank_memory import export_to_csv
+from runelite_plugins.bank_memory import export_to_csv
 
 
 if __name__ == "__main__":

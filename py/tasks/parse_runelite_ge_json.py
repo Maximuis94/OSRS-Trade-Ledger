@@ -70,7 +70,7 @@ class RowTuple:
     def upload_transaction(self, con: sqlite3.Connection):
         if self.is_submitted(con) and self.can_submit():
             con.execute("""INSERT INTO 'transaction'(transaction_id, item_id, timestamp, is_buy, quantity, price, status, tag, update_ts) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-                        (con.execute("SELECT MAX(transaction_id) FROM 'transactions'").fetchone()[0]+1, self.item_id, self.timestamp, self.is_buy, self.quantity, self.price, 1, 'j', j_ts))
+                        (con.execute("SELECT MAX(transaction_id) FROM 'transaction'").fetchone()[0]+1, self.item_id, self.timestamp, self.is_buy, self.quantity, self.price, 1, 'j', j_ts))
             
 
 def is_runelite_json_export(path: str):

@@ -14,8 +14,8 @@ from file.file import File
 from global_variables.importer import *
 from item.constants import ITEM_TABLE
 from item.controller import Item
-from model.data_source import SRC
-from model.database import Database
+from common import SRC
+from common import Database
 
 
 class ItemDB(Database):
@@ -153,3 +153,8 @@ class ItemDB(Database):
     def __getitem__(self, item: int | str) -> Item:
         """Retrieve an Item from the database"""
         return self.get_item(item)
+
+
+idb = ItemDB()
+print(idb[2])
+

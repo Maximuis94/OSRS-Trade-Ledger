@@ -127,16 +127,3 @@ class Font:
             underline=self.is_underlined,
             overstrike=self.is_overstruck
         )
-
-
-# if __name__ == '__main__':
-#     import tkinter as tk
-#     print(font.names(tk.Tk()))
-#     print(font.nametofont('TkDefaultFont', tk.Tk()).__doc__)
-#     print(font.nametofont('TkDefaultFont', tk.Tk()).cget('size'))
-#     print(font.nametofont('TkDefaultFont', tk.Tk()).cget('family'))
-#     print(font.nametofont('TkDefaultFont', tk.Tk()).cget('slant'))
-#     print(font.nametofont('TkDefaultFont', tk.Tk()).cget('weight'))
-#     print(font.nametofont('TkDefaultFont', tk.Tk()).cget('underline'))
-#     print(font.nametofont('TkDefaultFont', tk.Tk()).cget('overstrike'))
-    

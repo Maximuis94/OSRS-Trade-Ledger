@@ -1,143 +1,238 @@
 """
-Module with ListboxEntry class, which is a representation of a single row within a Listbox.
-"""
-from dataclasses import dataclass
-from typing import Dict, Iterable, Tuple
+Module: listbox_entry.py
+========================
+This module implements the ListboxRow class, which represents a single row within a Listbox.
+Each row aggregates formatted values from different columns and supports filtering and
+iterable access.
 
-import gui.component._listbox.column as listbox_column
+Classes
+-------
+ListboxRow
+    Immutable representation of a single row, with methods to format values,
+    apply filters, and access individual cell values.
+"""
+
+from dataclasses import dataclass
+from typing import Dict, Iterable, Tuple, Any, Union, Optional
+from gui.component._listbox.column import ListboxColumn
 from gui.component.interface.row import IRow
-from gui.component.filter.filter import Filter
+from gui.component._listbox.filter import Filter
 
 
 @dataclass(slots=True, order=True, init=False, repr=False)
 class ListboxRow(IRow):
     """
-    A single ListboxEntry. Its individual values can be accessed via ListboxEntry[ListboxColumn.column].
-    
-    
+    Represents a single row in a Listbox.
+
+    The row stores its values in two forms:
+      - `_values`: A dictionary mapping the ListboxColumn's `column` (str) to the raw value.
+      - `_strings`: A dictionary mapping a column ID (int) to the formatted string value.
+    The concatenated string representation (_string) is built from the formatted values,
+    preserving the order of keys in the row.
+
+    Attributes
+    ----------
+    _string : str
+        The concatenated, formatted string for the row.
+    columns : Tuple[int, ...]
+        A tuple of column IDs present in the row.
+    _values : Dict[str, Any]
+        A mapping from ListboxColumn.column (str) to the corresponding cell value.
+    _strings : Dict[int, str]
+        A mapping from column ID (int) to the formatted string value for that column.
+    filters : Optional[int]
+        A hash representing the set of filters last applied.
+    is_filtered : bool
+        Indicates whether the row is filtered (and therefore hidden).
+
+    Examples
+    --------
+    >>> values = {0: 42, 1: "example"}
+    >>> row = ListboxRow(values)
+    >>> print(row)
+    " 42    example "
     """
     _string: str
-    """Default row format, equal to the key order of dict, while including all values"""
-    
     columns: Tuple[int, ...]
-    """Tuple with the listbox column ids"""
-    
-    _values: Dict[str, any]
-    """A dict with a column_id as key and the associated value of that column as entry"""
-    
+    _values: Dict[str, Any]
     _strings: Dict[int, str]
-    """A dict with column_id as key and the associated value of that column, formatted as a string as entry"""
-    
-    filters: int or None
-    """A set of Filter instances applied to this entry"""
-    
+    filters: Optional[int]
     is_filtered: bool
-    """If True, one or more filters are applied, causing this entry to be hidden"""
-    
-    def __init__(self, values: Dict[int, any]):
-        self.columns = tuple(values.keys())
-        self._values, self._strings, string = {}, {}, []
-        for i, value in values.items():
-            lbc = listbox_column.get(i, "id")
-            self._values[lbc.column] = value
-            s = lbc.get_value(value)
-            self._strings[i] = s
-            string.append(s)
-        self._string = " " + " ".join(string)
-        self.filters = None
-        self.is_filtered = False
-    
-    def strf(self, column_order: Iterable[int] = None) -> str:
-        if column_order is None:
-            return self._string
-        return " ".join([self._strings[i] for i in column_order])
-    
-    def apply_filters(self, filters: Filter or Tuple[Filter] = None, hashed_filters: int = None) -> bool:
+
+    def __init__(self, values: Dict[int, Any]) -> None:
         """
-        Applies a set of filters to determine if the current object is filtered, and therefore be present in the Listbox
+        Construct a ListboxRow from a dictionary of values.
 
         Parameters
         ----------
-        filters : Filter or Iterable[Filter], optional
-            0-N Filters to apply.
+        values : dict
+            A dictionary where keys are column IDs (int) and values are the raw cell values.
+
+        Notes
+        -----
+        For each key in `values`, the corresponding ListboxColumn is retrieved (via `ListboxColumn.get_by_id`),
+        and the raw value is stored under the column's identifier in `_values`. The value is also formatted
+        using the column's `get_value` method and stored in `_strings`. Finally, all formatted values are concatenated
+        into `_string`.
+        """
+        self.columns = tuple(values.keys())
+        self._values, self._strings, string_parts = {}, {}, []
+        for col_id, value in values.items():
+            lbc = ListboxColumn.get_by_id(col_id)
+            # Use the column's identifier (a string) as the key.
+            self._values[lbc.column] = value
+            formatted = lbc.get_value(value)
+            self._strings[col_id] = formatted
+            string_parts.append(formatted)
+        self._string = " " + " ".join(string_parts)
+        self.filters = None
+        self.is_filtered = False
+
+    def strf(self, column_order: Optional[Iterable[int]] = None) -> str:
+        """
+        Format the row as a string.
+
+        Parameters
+        ----------
+        column_order : iterable of int, optional
+            An optional sequence of column IDs specifying the order in which to join formatted values.
+            If None, the default order (based on self.columns) is used.
+
+        Returns
+        -------
+        str
+            The formatted row string.
+        """
+        if column_order is None:
+            return self._string
+        return " ".join([self._strings[i] for i in column_order])
+
+    def apply_filters(self, filters: Union[Filter, Tuple[Filter, ...]] = None, hashed_filters: int = None) -> bool:
+        """
+        Apply a set of filters to the row.
+
+        The method invokes each filter on the row. If any filter returns False,
+        the row is marked as filtered.
+
+        Parameters
+        ----------
+        filters : Filter or tuple of Filter, optional
+            One or more filters to apply.
         hashed_filters : int, optional
-            A hash value derived from `filters`. Used to prevent repetitive calls.
-    
+            A hash value representing the filters. If this matches the previously applied filters,
+            the filtering is skipped.
+
         Returns
         -------
         bool
-            True if any of the filters fail (-> object is filtered), False otherwise.
-    
+            True if the row is filtered (i.e., at least one filter failed), False otherwise.
+
         Notes
         -----
-        - If `filters` is `None`, result is False
-        - If `self.filters` matches the `hashed_filters`, the method avoids reapplying
-          the filters and directly returns the existing filtering state (`self.is_filtered`).
-        - The `filters` parameter can either be a single `Filter` or a tuple
-          of such Filters. Each Filter is invoked with this ListboxEntry, and if any of them return `False`, the Entry
-          is considered filtered.
+        - If `filters` is None, the row is not filtered.
+        - If the current filters match the provided `hashed_filters`, the existing `is_filtered`
+          value is returned.
         """
         if filters is None:
             self.filters = None
             self.is_filtered = False
             return False
-        
-        # Filter was previously applied; return that outcome rather than re-applying filters.
+
         if self.filters is not None and self.filters == hashed_filters:
             return self.is_filtered
-        
+
         self.is_filtered = False
-        for f in filters:
+        # If filters is a single Filter, convert it to a tuple.
+        filter_tuple = filters if isinstance(filters, tuple) else (filters,)
+        for f in filter_tuple:
             if not f(self):
                 self.is_filtered = True
         self.filters = hashed_filters
         return self.is_filtered
-    
+
     @staticmethod
-    def generate(entry_values: dict):
-        """ Returns a ListboxEntry, generated from `entry_values` """
-        return ListboxRow(entry_values)
-    
-    def __getitem__(self, item: str | int) -> any:
+    def generate(entry_values: Dict[int, Any]) -> 'ListboxRow':
         """
-        Get a specific value from the values this ListboxEntry holds. `item` can be a column attribute from the
-        ListboxColumn, or the `id` attribute. Recommended usage is via Listbox.column, however.
-        
+        Generate a ListboxRow from a dictionary of entry values.
+
         Parameters
         ----------
-        item : str | int
-            ListboxColumn.column attribute (str) or ListboxColumn.id (int)
+        entry_values : dict
+            A dictionary with column IDs as keys and cell values as values.
+
+        Returns
+        -------
+        ListboxRow
+            The generated ListboxRow instance.
+        """
+        return ListboxRow(entry_values)
+
+    def __getitem__(self, item: Union[str, int]) -> Any:
+        """
+        Retrieve a cell value from the row.
+
+        Parameters
+        ----------
+        item : str or int
+            If a string, it should match a ListboxColumn.column attribute.
+            If an integer, it represents the ListboxColumn.id.
 
         Returns
         -------
         any
-            Will return the corresponding value, if it exists.
+            The corresponding cell value if found.
+
+        Raises
+        ------
+        KeyError
+            If the key is not found in the row.
         """
         try:
-            # print(listbox_column.get("id" if isinstance(item, int) else item).column)
-            return self._values.get(item)#, self._values[listbox_column.get("id", item).column])
+            return self._values.get(item)
         except KeyError:
-            msg = (f"KeyError in ListboxEntry.__getitem__ with key={item} of type={type(item)} "
-                   f"The following keys are valid; "
-                   f"{', '.join([str(c) for c in self.columns] + list(self._values.keys()))}")
-            raise KeyError(msg)
-    
+            valid_keys = ", ".join([str(k) for k in self.columns] + list(self._values.keys()))
+            raise KeyError(f"Key '{item}' not found in ListboxRow. Valid keys: {valid_keys}")
+
     def __iter__(self):
         """
-        Iterate over the values of the _values dictionary.
+        Iterate over the cell values in the row.
 
         Yields
         ------
-        Any
-            The values from the _values dictionary.
+        any
+            Each cell value stored in the row.
         """
         return iter(self._values.values())
-    
+
     def __len__(self) -> int:
+        """
+        Return the number of cells in the row.
+
+        Returns
+        -------
+        int
+            The number of key-value pairs in the row.
+        """
         return len(self._values)
-    
-    def __repr__(self):
+
+    def __repr__(self) -> str:
+        """
+        Return a string representation of the row.
+
+        Returns
+        -------
+        str
+            The formatted string for the row.
+        """
         return self._string
-    
-    def __str__(self):
+
+    def __str__(self) -> str:
+        """
+        Return the formatted row as a string.
+
+        Returns
+        -------
+        str
+            The formatted string for the row.
+        """
         return self._string

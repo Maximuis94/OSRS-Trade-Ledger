@@ -7,8 +7,8 @@ from collections.abc import Iterable
 
 from venv_auto_loader.active_venv import *
 import global_variables.path as gp
-from model.data_source import SRC
-from model.database import Database, sql_create_timeseries_item_table
+from common import SRC
+from common import Database, sql_create_timeseries_item_table
 __t0__ = time.perf_counter()
 
 

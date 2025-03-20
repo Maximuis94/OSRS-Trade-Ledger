@@ -4,7 +4,6 @@ Executable module that is used to fill prices from src=1, 2 that are 0 for some 
 """
 
 import sqlite3
-import time
 from collections.abc import Iterable
 
 
@@ -18,8 +17,8 @@ import util.array as u_ar
 import util.file as uf
 import util.str_formats as fmt
 from file.file import File
-from model.data_source import SRC
-from model.database import Database
+from common import SRC
+from common import Database
 __t0__ = time.perf_counter()
 
 

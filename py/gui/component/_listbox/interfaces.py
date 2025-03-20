@@ -14,9 +14,6 @@ SortScoreFunction = Callable[[Sequence[any]], int | float]
 StringFormatFunction = Callable[[Sequence[any]], str]
 
 
-
-
-
 class IFilter(metaclass=FilterMeta):
     """
     Filter class that used for filtering Entries. Instances are to be applied via IFilter(entry, threshold)

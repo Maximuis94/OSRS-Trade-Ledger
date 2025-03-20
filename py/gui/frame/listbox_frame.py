@@ -3,12 +3,10 @@ This module contains the implementation of the GuiListbox
 
 """
 import tkinter as tk
-import tkinter.ttk as ttk
 from abc import ABC, abstractmethod
 from collections.abc import Callable, Iterable, Sequence
-from typing import List, Tuple, Optional, final
+from typing import Optional, final
 
-from multipledispatch import dispatch
 from typing_extensions import NamedTuple
 
 from gui.base.frame import GuiFrame
@@ -16,20 +14,11 @@ from gui.component.interface.column import IListboxColumn
 from gui.component.interface.filter import IFilter
 from gui.component.interface.row import IRow
 
-from gui.component.button import GuiButton
-from gui.base.frame import TkGrid
-from gui.component.filter.predefined_filters import Filters, NUM_FILTERS
-from gui.component.label import GuiLabel
-from gui.component._listbox._column import ListboxColumn
-from gui.component._listbox.entry_manager import ListboxEntries
 from gui.component.listbox import GuiListbox
-from gui.util.colors import Color, Rgba
-from gui.util.constants import letters, empty_tuple
-from gui.component.filter.filter import Filter
-from gui.component._listbox.row import ListboxRow
-from gui.component.sort.sort import Sort, Sorts
+from gui.util.colors import Rgba
+from gui.util.constants import empty_tuple
+from gui.component._listbox.sort import Sorts
 from gui.util.font import Font
-from gui.util.generic import SupportsGetItem
 
 _GRID_LAYOUT = "A" * 10, "B" * 7 + "C" * 3
 """Grid layout to apply to a GuiListboxFrame"""

@@ -103,7 +103,7 @@ import util.str_formats as fmt
 def test_db_small(db, sql, params):
     db = Database(db, parse_tables=False)
     _t0 = time.perf_counter()
-    db.connect()
+    db._connect()
     n_rows = len(db.execute(sql, params).fetchall())
     
     print(f"Query time for {n_rows} rows from one table: {int(1000*(time.perf_counter()-_t0))}ms", end='\n\n')

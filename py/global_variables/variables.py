@@ -19,7 +19,9 @@ from collections import namedtuple
 import numpy as np
 
 from venv_auto_loader.active_venv import *
-from global_variables.data_classes import Avg5mDatapoint, RealtimeDatapoint, WikiDatapoint, Transaction, Item
+from global_variables.data_classes import Avg5mDatapoint, RealtimeDatapoint, WikiDatapoint, Transaction
+from common.classes.item import Item
+
 __t0__ = time.perf_counter()
 
 
@@ -318,6 +320,3 @@ exception_msg_csv_dtypes = {'msg_idx': 'int64', 'exception_class': 'string', 'kw
 exception_msg_csv_dtypes = {
     k: exception_msg_csv_dtypes.get(k) if exception_msg_csv_dtypes.get(k) is not None else 'string'
     for k in ExceptionRow._fields}
-
-if __name__ == '__main__':
-    print(list(exception_msg_csv_dtypes.keys()))

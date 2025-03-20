@@ -48,6 +48,8 @@ from typing import Any
 from overrides import override
 
 from venv_auto_loader.active_venv import *
+
+import common.classes.item
 import global_variables.data_classes
 import global_variables.osrs as go
 import global_variables.path as gp
@@ -56,6 +58,7 @@ from model.table import Column, Table
 from util.data_structures import *
 from util.sql import *
 __t0__ = time.perf_counter()
+
 
 class Database(sqlite3.Connection):
     """
@@ -354,7 +357,7 @@ class Database(sqlite3.Connection):
             print(sql)
         failed = []
         for row in rows:
-            row = {col: row.get(col) for col in global_variables.data_classes.Item._fields}
+            row = {col: row.get(col) for col in common.classes.item.Item._fields}
             try:
                 con.execute(sql, row)
                 if prt:

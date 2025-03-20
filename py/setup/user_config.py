@@ -1,15 +1,13 @@
 """
-Module for setting up roots.json file, a file with several paths that are frequenly used throughout the project.
-
+Module for setting up roots.json file, a file with several paths that are frequently used throughout the project.
 """
 
 import os.path
-import time
 import pandas as pd
 
 from venv_auto_loader.active_venv import *
 from file.file import Root
-from file.local_file import generate_roots_config
+from global_variables._initialize_path import generate_roots_config
 __t0__ = time.perf_counter()
 
 t_setup_start = time.perf_counter()
