@@ -5,12 +5,12 @@ Module with Item Controller class
 import sqlite3
 from typing import Literal, Tuple, Dict, Callable
 
-from interfaces.db_entity import IDbEntity
+from interfaces.db_entity import DbEntity
 from item.model import Item as ItemModel
 import global_variables.path as gp
 
 
-class Item(ItemModel, IDbEntity):
+class Item(ItemModel, DbEntity):
     """Item class with additional functionality"""
     sqlite_table: Literal['item'] = "item"
     sqlite_attributes: Tuple[str, ...] = ItemModel.__match_args__[:19]

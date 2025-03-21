@@ -4,12 +4,11 @@ Old inventory code
 # TODO: Rework inventory management
 
 """
+import datetime
 import pandas as pd
 
-from model.item import Item
-
 from global_variables.importer import *
-
+from item.db_entity import Item
 
 
 # Placeholder entry
@@ -23,7 +22,7 @@ def create_inv_item_entry():
         "sell_value": 0,  # Total value (target)
         "total_profit": 0,  # Absolute profit in GP
         "profit": 0,  # Profit in % increase
-        "buy_date": date.datetime.today(),
+        "buy_date": datetime.datetime.today(),
         "active": False,
         "share": 0,
         "lifetime_profit": 0  # Total profit made trading this item

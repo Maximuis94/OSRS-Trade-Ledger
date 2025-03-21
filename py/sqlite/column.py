@@ -45,7 +45,6 @@ class Column(NamedTuple):
         c.row_factory = factory_idx0
         output = []
         sql = c.execute("""SELECT sql FROM sqlite_master WHERE tbl_name=? """, (table,)).fetchone().replace("\t", " ")
-        # print(sql)
         if sql is None:
             raise ValueError(f"Unable to find table '{table}' in sqlite_master")
         pk_idx = sql.index("PRIMARY KEY(") + 12

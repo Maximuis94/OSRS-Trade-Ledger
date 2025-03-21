@@ -42,23 +42,18 @@ controller.timeseries
 
 """
 import os.path
-import shutil
 import sqlite3
-import warnings
 from collections import namedtuple
 from collections.abc import Container, Collection
 from typing import Any, Optional
 
 from overrides import override
 
-from venv_auto_loader.active_venv import *
-
 import common.classes.item
-import global_variables.data_classes as data_classes
-import sqlite.row_factories as factories
+import common.row_factories as factories
 # import util.verify as verify
 from file.file import IFile
-from model.table import Column, Table
+from common.classes.table import Column, Table
 from util import verify
 from util.data_structures import *
 from util.sql import *
@@ -371,7 +366,7 @@ class Database(sqlite3.Connection, IFile):
             else:
                 s = _table.name
             self.tables[_table.name] = Table(table_name=s, columns=columns, foreign_keys=[],
-                                             db_file=self.path)
+                                             db_file=File(self.path))
             if parse_one:
                 return
     
@@ -424,47 +419,6 @@ class Database(sqlite3.Connection, IFile):
         for _, table in self.tables.items():
             if table.column_tuple == columns:
                 return table
-    
-    def insert_df(self, df: pd.DataFrame, columns: Collection[str] = None, con: sqlite3.Connection = None) -> bool:
-        """
-        Insert rows of DataFrame `df` into a table of the database for which the columns match the columns of `df`.
-        If `column_subset` is passed, restrict the to-be submitted columns to this subset.
-        
-        Parameters
-        ----------
-        df : pandas.DataFrame
-            The DataFrame that is to be inserted into this sqlite database
-        columns : Collection[str], optional, None by default
-            Subset of columns that is to be inserted into the database. By default, it is equal to `df`.columns.
-        con : sqlite3.Connection, optional, None by default
-            A connection to submit the rows to. If not passed, establish one and commit upon completion. If `con` is
-            passed, the executed sql statements will *not* be committed upon completion
-
-        Returns
-        -------
-        bool
-            True if the DataFrame was submitted to the database, False if not.
-        """
-        raise NotImplementedError("Added @ 26-06")
-        if columns is None:
-            columns = list(df.columns)
-        else:
-            for delete_column in frozenset(df.columns).difference(columns):
-                del df[delete_column]
-        columns = get_sorted_tuple(columns)
-        # print(self.get_table_by_columns(columns=columns).insert_replace_dict)
-        try:
-            if con is None:
-            #     con.executemany()
-            # else:
-                self.con_exe_com(sql=self.get_table_by_columns(columns=columns).insert_replace_dict,
-                                 parameters=df.to_dict('records'),
-                                 execute_many=True)
-            else:
-                con.executemany(self.get_table_by_columns(columns=columns).insert_replace_dict, df.to_dict('records'))
-            return True
-        except AttributeError:
-            return False
         
     def get_min(self, table: str, column: str, suffix: str = '', factory=None):
         """ Return the smallest value of `column` in `table` """

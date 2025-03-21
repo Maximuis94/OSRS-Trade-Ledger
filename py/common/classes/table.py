@@ -14,16 +14,14 @@ of parameters. This is covered in more detail in the base Row class.
 
 The base class Row is also implemented by Table, which acts as the controller of a sqlite table.
 """
-import sqlite3
 from typing import Type, Tuple, Callable, Dict, List, Iterable
 
 import pandas as pd
 
-from venv_auto_loader.active_venv import *
 import util.data_structures as ud
 from file.file import File
 from global_variables import variables as var
-from global_variables.data_classes import *
+from common.classes.data_classes import *
 from sqlite.executable import insert_sql_dict
 from util.sql import get_db_contents
 

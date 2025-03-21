@@ -21,11 +21,11 @@ from item.item_entity import Item
 ITEM_DB_FILE: File = gp.f_db_item
 ITEM_DB_TABLE: str = "item"
 
-
 @dataclass(slots=True)
 class _ItemDb(metaclass=SingletonMeta):
     """Class for providing Item data. Can be called using ItemDb[item_id] or ItemDb[item_name] to get an Item"""
     _init_time: int or float
+    _ids: Tuple[int, ...]
     _items: Tuple[Item | None, ...]
     _name_item: Dict[str, Item]
     _nature_rune_price: Tuple[int, int]
@@ -35,19 +35,17 @@ class _ItemDb(metaclass=SingletonMeta):
     _rt = realtime_prices()
     
     def __init__(self):
+        t0 = time.time()
         conn = sqlite3.connect(gp.f_db_local)
         c = conn.cursor()
         c.row_factory = lambda cursor, row: row[0]
         
-        _ids = c.execute("SELECT DISTINCT item_id FROM item").fetchall()
+        self._ids = tuple(c.execute("SELECT DISTINCT item_id FROM item").fetchall())
         
         c.row_factory = lambda cursor, row: Item(*row)
-        _items = tuple([None if item_id not in _ids else Item.create(item_id, c) for item_id in range(max(_ids) + 1)])
-        
-        for i in _items:
-            if i is not None:
-                i.current_ge
-                print(i)
+        self._items = tuple([None if item_id not in self._ids else Item.create(item_id, c) for item_id in range(max(self._ids) + 1)])
+        self._name_item = {_i.item_name: _i for _i in self._items if _i is not None}
+        print(f"ItemDb was set up in {1000*(time.time()-t0):.0f}ms")
     
     # def __init__(self):
     #     global ITEM_DB_FILE, ITEM_DB_TABLE
@@ -158,11 +156,11 @@ __all__ = ["itemdb"]
 
 if __name__ == '__main__':
     i = itemdb["Cannonball"]
-    print([i.item_id for i in itemdb._items if isinstance(i, Item) and i.equipable])
-    print([i.item_name for i in itemdb._items if isinstance(i, Item) and i.equipable])
+    # print([i.item_id for i in itemdb._items if isinstance(i, Item) and i.equipable])
+    # print([i.item_name for i in itemdb._items if isinstance(i, Item) and i.equipable])
+    #
     
-    
-    # print(i.__repr__())
+    print(i.__repr__())
     # print(i.sqlite_columns())
     # exit(1)
     

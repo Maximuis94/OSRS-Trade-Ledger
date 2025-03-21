@@ -14,16 +14,14 @@ import sqlite3
 import threading
 import time
 
-import pandas as pd
-
+import backend.npy_db_updater as npy_db
 import global_variables.osrs as go
 import global_variables.path as gp
-import backend.npy_db_updater as npy_db
+import util.str_formats as fmt
+from common.classes.database import Database
 from file.file import File
 from global_variables.osrs import npy_items
 from global_variables.values import empty_tuple
-from my_util import *
-from model.timeseries import TimeseriesDB
 
 empty_db: File = gp.f_db_npy
 
@@ -95,9 +93,6 @@ def create_npy_db_threaded(n_threads: int = 4, reset_db: bool = False):
         threads.append(AsyncTask(idx, n_threads, callback_oncomplete=is_done))
     for t in threads:
         t.start()
-
-
-import util.str_formats as fmt
 
 
 def test_db_small(db, sql, params):

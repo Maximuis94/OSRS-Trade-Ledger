@@ -68,8 +68,3 @@ class ForeignKey(NamedTuple):
     
     def __repr__(self):
         return f"""FOREIGN KEY({self.column_from}) REFERENCES {self.table_to}({self.column_to})"""
-
-
-
-
-

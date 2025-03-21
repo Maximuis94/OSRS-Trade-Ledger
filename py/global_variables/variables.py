@@ -17,10 +17,10 @@ get_dtype(variable: any) -> DataType:
 from collections import namedtuple
 
 import numpy as np
-
 from venv_auto_loader.active_venv import *
-from global_variables.data_classes import Avg5mDatapoint, RealtimeDatapoint, WikiDatapoint, Transaction
+
 from common.classes.item import Item
+from global_variables.datapoint import Avg5mDatapoint, RealtimeDatapoint, Transaction, WikiDatapoint
 
 __t0__ = time.perf_counter()
 

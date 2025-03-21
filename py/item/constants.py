@@ -3,16 +3,12 @@ Module with item-related fixed values.
 """
 import sqlite3
 from collections.abc import Callable
-from typing import Tuple, Iterable
-
-from filetype import get_type
-from typing_extensions import get_type_hints
+from typing import Tuple
 
 from file.file import File
 from global_variables.path import f_db_local as itemdb_file
-from sqlite.table import Table
 from sqlite.column import Column
-
+from sqlite.table import Table
 
 ITEMDB_FILE: File = itemdb_file
 """The default ItemDB file"""

@@ -20,9 +20,10 @@ submitted to the database) is backed up.
 from dataclasses import dataclass
 from typing import Dict
 
-import global_variables.data_classes
+import common.classes.data_classes
+import global_variables.datapoint
 from common.item import create_item
-from global_variables.data_classes import ExeLogEntry
+from common.classes.data_classes import ExeLogEntry
 from global_variables.values import ge_tax_min_ts
 from common import Database
 from model.transaction import *
@@ -240,7 +241,7 @@ class InventoryEntry(InventoryEntryModel):
         sql = "INSERT OR REPLACE INTO 'transaction'("
         b = ") VALUES ("
         args = []
-        for c in global_variables.data_classes.Transaction.__match_args__:
+        for c in global_variables.datapoint.Transaction.__match_args__:
             if c in _extra_columns:
                 continue
             sql += c + ', '

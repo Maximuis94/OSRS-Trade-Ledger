@@ -14,8 +14,6 @@ from file.file import File
 from global_variables.importer import *
 from item.constants import ITEM_TABLE
 from item.controller import Item
-from common import SRC
-from common import Database
 
 
 class ItemDB(Database):

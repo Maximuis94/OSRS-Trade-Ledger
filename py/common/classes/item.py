@@ -1,12 +1,9 @@
-from datetime import datetime
-
 import sqlite3
-
+from dataclasses import dataclass, field, fields
+from datetime import datetime
 from typing import Tuple
 
-from dataclasses import dataclass, field, fields
-
-from global_variables.data_classes import _item_table
+_item_table = "item"
 
 
 @dataclass(order=True, match_args=True)

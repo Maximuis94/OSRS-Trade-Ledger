@@ -7,7 +7,7 @@ The databases as they are defined here should correspond with the column orderin
 
 from venv_auto_loader.active_venv import *
 from global_variables.path import f_db_local, f_db_timeseries
-from model.table import Column, Table
+from common.classes.table import Column, Table
 __t0__ = time.perf_counter()
 
 

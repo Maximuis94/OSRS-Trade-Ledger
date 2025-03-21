@@ -7,12 +7,12 @@ import time
 
 from venv_auto_loader.active_venv import *
 import global_variables.path as gp
-# import global_variables.local_file as gl
 import global_variables.variables as gd
 import global_variables.osrs as go
 import global_variables.configurations as gc
 import global_variables.values as gv
 import global_variables.variables as var
+import global_variables.local_file as gl
 
 import util.str_formats as fmt
 import util.unix_time as ut

@@ -14,7 +14,7 @@ import global_variables.path as gp
 __t0__ = time.perf_counter()
 
 from backend.download import realtime_prices
-from global_variables.itemdb import itemdb
+from item.itemdb import itemdb
 
 # User agent passed when making certain http requests
 _item_table = 'item'

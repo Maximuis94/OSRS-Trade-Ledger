@@ -6,7 +6,7 @@ import sqlite3
 from collections.abc import Callable
 
 from venv_auto_loader.active_venv import *
-from global_variables.data_classes import PlotStats
+from common.classes.data_classes import PlotStats
 from sqlite.row_factories import timeseries_row_factory
 __t0__ = time.perf_counter()
 

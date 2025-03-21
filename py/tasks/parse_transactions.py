@@ -89,7 +89,7 @@ import util.unix_time as ut
 from util.logger import prt
 from common.item import remap_item, create_item
 from file.file import File
-from model.item import Item
+from item.db_entity import Item
 from model.transaction import Transaction
 __t0__ = time.perf_counter()
 _db_path = gp.f_db_local
@@ -401,9 +401,9 @@ def submit_transaction_queue(queue_file: File = gp.f_exchange_log_queue, submit_
         db_con = sqlite3.connect(_db_path)
         c = db_con.cursor()
         t_id = c.execute("""SELECT MAX(transaction_id) FROM 'transaction' """).fetchone()[0]
-        sql_exe = "INSERT INTO 'transaction'(transaction_id, item_id, timestamp, is_buy, quantity, price, " \
-                  "status, tag, update_ts) VALUES(:transaction_id, :item_id, :timestamp, :is_buy, " \
-                  ":quantity, :price, :status, :tag, :update_ts)"
+        sql_exe = """INSERT INTO 'transaction'(transaction_id, item_id, timestamp, is_buy, quantity, price, """ \
+                  """status, tag, update_ts) VALUES(:transaction_id, :item_id, :timestamp, :is_buy, """ \
+                  """:quantity, :price, :status, :tag, :update_ts)"""
         
         q = q.to_dict('records')
         queue, queue_vars = [], list(q[0].keys())

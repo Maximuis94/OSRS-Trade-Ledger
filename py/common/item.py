@@ -15,8 +15,9 @@ from file.file import File
 from global_variables.importer import *
 from common import SRC
 from common import Database
-from model.item import Item
+from item.db_entity import Item
 from sqlite.row_factories import factory_dict
+from sqlite.databases import item
 
 __t0__ = time.perf_counter()
 
@@ -67,14 +68,7 @@ def create_item(item_id: int, itemdb: sqlite3.Connection = None, read_only: bool
         itemdb = sqlite3.connect(database=f"file:{gp.f_db_local}?mode=ro", uri=True)
     
     try:
-        # exists = go.id_name[item_id] is not None
-        # print(itemdb.execute("""SELECT * FROM item WHERE item_id=?""", (item_id,)).fetchone())
-        # print(item_id, type(item_id))
         return Item(*itemdb.execute("""SELECT * FROM item WHERE item_id=?""", (item_id,)).fetchone())
-        # if isinstance(i, Item):
-        #     return i
-        # else:
-        #     raise TypeError(f"Unexpected type {type(i)} in create_item()...")
     except IndexError:
         raise ValueError(f'No valid reference could be found for item_id={item_id}. If the item was added recently, '
                          f'item data')
@@ -82,21 +76,24 @@ def create_item(item_id: int, itemdb: sqlite3.Connection = None, read_only: bool
         print(f'TypeError for item_id={item_id} ')
         if read_only:
             raise e
-        # db = pickle.load(open(gp.f_db_rbpi_item, 'rb'))
-        # db = db.loc[db['item_id'] == item_id].iloc[0].to_dict()
-        # con = sqlite3.connect(gp.f_db_local)
-        from sqlite.databases import item
-        # print(item.columns)
+        
         db = sqlite3.connect(gp.f_db_rbpi_item)
         db.row_factory = factory_dict
-        e = augment_itemdb_entry(Item(**db.execute("SELECT * FROM 'itemdb' WHERE item_id=?", (item_id,)).fetchone())).__dict__
-        # print({k: e.get(k) for k in item.columns})
-        # exit(123)
-        print(item.insert_dict, {k: e.get(k) for k in item.columns})
-        itemdb.execute(item.insert_dict, {k: e.get(k) for k in item.columns})
-        itemdb.commit()
-        # con.close()
-        raise e
+        if isinstance(item_id, str) and not item_id.isdigit():
+            e = augment_itemdb_entry(
+                Item(**db.execute("SELECT * FROM 'itemdb' WHERE item_name=?", (item_id,)).fetchone())).__dict__
+        else:
+            e = augment_itemdb_entry(Item(**db.execute("SELECT * FROM 'itemdb' WHERE item_id=?", (item_id,)).fetchone())).__dict__
+            
+        try:
+            cursor = itemdb.cursor()
+            if itemdb.execute("""SELECT COUNT(*) FROM "item" WHERE item_id=?""", (e["item_id"],)).fetchone()[0]:
+                cursor.row_factory = factory_dict
+                return Item(**cursor.execute("""SELECT * FROM "item" WHERE item_id=?""", (e["item_id"],)).fetchone())
+            itemdb.execute(item.insert_dict, {k: e.get(k) for k in item.columns})
+            itemdb.commit()
+        except sqlite3.IntegrityError as e:
+            raise e
     
     # TODO step 2: define item attributes and assign values
     
@@ -309,20 +306,6 @@ class ItemController(Database):
         """ Insert `item` as a new entry into the database. NB this will only create a new row! """
         # raise NotImplementedError("Added @ 26-06")
         self.insert_rows(table_name=self.table_name, rows=[item.sql_row()], replace=False)
-    
-    def update_item(self, item: Item, attribute_subset: Iterable = None, replace: bool = True,
-                    return_row: bool = False):
-        """ Overwrite db entry using values from `item`, pass an Iterable with attributes to update only a subset """
-        raise NotImplementedError("Added @ 26-06")
-        if attribute_subset is not None and replace:
-            row = self.get_item(item_id=item.item_id).sql_row()
-            row.update({k: item.__dict__.get(k) for k in attribute_subset})
-        else:
-            row = item.sql_row()
-        if return_row:
-            return row
-        else:
-            self.insert_rows(table_name=self.table_name, rows=[row], replace=replace)
     
     def set_item_factory(self, augment_items: bool = None):
         """ Set the row factory to default item factory or augmented item factory, depending on `augment_items` """

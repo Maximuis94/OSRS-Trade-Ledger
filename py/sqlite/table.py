@@ -9,7 +9,7 @@ from collections import namedtuple
 from dataclasses import dataclass
 from typing import Sequence, Callable, Iterable
 
-from sqlite.column import Column, parse_columns
+from sqlite.column import Column
 
 
 @dataclass(match_args=True, init=False)
@@ -45,7 +45,7 @@ class Table:
         self.name = name
         
         # c.row_factory = self.factory_column
-        self.columns = parse_columns(c.cursor(), table=name)
+        self.columns = Column.parse_columns(c.cursor(), table=name)
         
         self.Row = namedtuple(f'{name}Row', [c.name for c in self.columns])
         self.row_factory = lambda _, row: self.Row(*row) if row_factory is None else row_factory
@@ -63,7 +63,6 @@ class Table:
         
     def create_table(self, check_exists: bool = False) -> str:
         """ Generate an executable SQLite statement for this table, given the columns it's composed of. """
-        
         sql = f""" CREATE TABLE {'IF NOT EXISTS ' if check_exists else ''} "{self.name}" ("""
         pk = "PRIMARY KEY("
         columns = {column.id: column for column in self.columns}

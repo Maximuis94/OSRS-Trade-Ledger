@@ -36,19 +36,17 @@ model.
     
 
 """
-import time
+from typing import Dict, Optional
 
 import sqlite3
 from collections.abc import Callable
 from enum import Enum
-from typing import Dict, List, Optional, Tuple
 
-# from common.classes.data_classes import *
 from global_variables.datapoint import Avg5mDatapoint, NpyDatapoint, RealtimeDatapoint, TimeseriesDatapoint, \
     Transaction, WikiDatapoint
 # from common.classes.item import Item
-from global_variables.variables import SqliteSchema, types
-
+from global_variables.variables import types, SqliteSchema
+from common.classes.data_classes import *
 __t0__ = time.perf_counter()
 
 
@@ -78,6 +76,21 @@ def factory_dict(c: sqlite3.Cursor, row: tuple) -> Dict[str, SqlPyVar]:
 def factory_dict_2(c: sqlite3.Cursor, row: tuple) -> Dict[str, SqlPyVar]:
     """ Return `row` as a dict, using column names as key """
     return {c[0]: row[i] for i, c in enumerate(c.description)}
+
+
+def factory_dict_cast(c: sqlite3.Cursor, row: tuple) -> Dict[str, SqlPyVar]:
+    """ Return `row` as a dict, using column names as key """
+    try:
+        return {c[0]: types.get(c[0]).py(row[i]) for i, c in enumerate(c.description)}
+    except TypeError:
+        d = {}
+        for i, c in enumerate(c.description):
+            try:
+                d[c[0]] = types.get(c[0]).py(row[i])
+            except TypeError:
+                d[c[0]] = types.get(c[0]).default
+                # print(c[0], types.get(c[0]).default)
+        return d
 
 
 # def factory_item_tuple(c: sqlite3.Cursor, row: tuple) -> Item:
@@ -248,9 +261,9 @@ factories_by_type = {
     Avg5mDatapoint: factory_avg5m,
     RealtimeDatapoint: factory_realtime,
     WikiDatapoint: factory_wiki,
-    # NpyAvg5mTuple: factory_avg5m,
-    # NpyRealtimeTuple: factory_realtime,
-    # NpyWikiTuple: factory_wiki,
+    NpyAvg5mTuple: factory_avg5m,
+    NpyRealtimeTuple: factory_realtime,
+    NpyWikiTuple: factory_wiki,
     SqliteSchema: factory_db_content_parser
 }
 

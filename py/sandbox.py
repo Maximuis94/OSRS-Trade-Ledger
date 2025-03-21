@@ -7,7 +7,7 @@ import pandas as pd
 
 from backend.download import realtime_prices
 from global_variables.importer import *
-from global_variables.itemdb import itemdb
+from item.itemdb import itemdb
 from model.database import Database
 from model.timeseries import TimeseriesDB
 

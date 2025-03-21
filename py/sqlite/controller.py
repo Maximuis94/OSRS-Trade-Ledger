@@ -47,14 +47,11 @@ from typing import Any
 
 from overrides import override
 
-from venv_auto_loader.active_venv import *
-
 import common.classes.item
-import global_variables.data_classes
 import global_variables.osrs as go
 import global_variables.path as gp
 import sqlite.row_factories as factories
-from model.table import Column, Table
+from common.classes.table import Column, Table
 from util.data_structures import *
 from util.sql import *
 __t0__ = time.perf_counter()

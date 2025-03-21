@@ -23,7 +23,7 @@ import util.unix_time as ut
 from common.item import create_item, Item
 from data_processing.npy_array_computations import avg_price_summed_volume
 from file.file import File
-from global_variables.data_classes import NpyDatapoint as NpyDp
+from global_variables.datapoint import NpyDatapoint as NpyDp
 from common import DataSource, SRC
 from common import Database
 __t0__ = time.perf_counter()

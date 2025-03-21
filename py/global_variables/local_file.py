@@ -20,7 +20,7 @@ import backend.download as dl
 import global_variables.configurations as cfg
 import global_variables.path as gp
 from global_variables.classes import SingletonMeta
-from model.local_file import LocalFile, FlagFile
+from common.classes.local_file import LocalFile, FlagFile
 __t0__ = time.perf_counter()
 debug = True
     
@@ -45,7 +45,7 @@ class RealtimePricesSnapshot(LocalFile, metaclass=SingletonMeta):
         print(f'Setting up RealtimePricesSnapshot class (allow_rbpi_download={self.download_from_rbpi})')
     
     @override
-    def get_value(self, update_check: bool = False, **kwargs) -> tuple:
+    def get_value(self, update_check: bool = False, **kwargs) -> Tuple[int, int]:
         """ Get the realtime low- and high- prices for the item specified with `item_id` """
         # Verify if the data is available, and check for update if applicable
         self.update()
@@ -77,7 +77,7 @@ class RealtimePricesSnapshot(LocalFile, metaclass=SingletonMeta):
             self.file_content = new_data
         return self.file_content
     
-    def get_price(self, item_id: int):
+    def get_price(self, item_id: int) -> Tuple[int, int]:
         """ Get the buy and sell prices for item `item_id` """
         return self.get_value(item_id=item_id)
     
@@ -85,7 +85,9 @@ class RealtimePricesSnapshot(LocalFile, metaclass=SingletonMeta):
     def get_update_frequency() -> int:
         """ If an updated version of the snapshot can be downloaded from rbpi, update more frequently """
         return cfg.rt_rbpi_update_frequency if gp.f_rbpi_rt.exists() else cfg.rt_update_frequency
-
+    
+    def __getitem__(self, item: int) -> Tuple[int, int]:
+        return self.get_price(item)
 
 rt_prices_snapshot = RealtimePricesSnapshot()
 

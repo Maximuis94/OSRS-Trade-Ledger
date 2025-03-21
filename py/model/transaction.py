@@ -12,16 +12,13 @@ https://blog.teclado.com/python-abc-abstract-base-classes/
 """
 
 import sqlite3
-import time
-from abc import ABC, abstractmethod
-from typing import Type
 
 from overrides import override
 
-from venv_auto_loader.active_venv import *
 from global_variables.importer import *
-from model.item import Item
-from global_variables.data_classes import Transaction as _Transaction
+from item.db_entity import Item
+from global_variables.datapoint import Transaction as _Transaction
+
 __t0__ = time.perf_counter()
 
 

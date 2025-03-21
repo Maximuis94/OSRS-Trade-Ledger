@@ -6,8 +6,6 @@ This module contains various util methods for analyzing npy db data.
 """
 import datetime
 import sqlite3
-import time
-import warnings
 from collections.abc import Iterable, Sized
 from typing import List
 
@@ -17,7 +15,8 @@ from venv_auto_loader.active_venv import *
 import util.verify as verify
 import util.unix_time as ut
 from global_variables import path as gp
-from global_variables.data_classes import NpyDatapoint as Dp
+from global_variables.datapoint import NpyDatapoint as Dp
+
 __t0__ = time.perf_counter()
 
 default_t1 = int(time.time())
