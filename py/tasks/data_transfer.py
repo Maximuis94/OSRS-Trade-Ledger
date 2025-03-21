@@ -26,7 +26,7 @@ import util.file as uf
 import util.str_formats as fmt
 from common.classes.database import sql_create_timeseries_item_table
 from common.item import Item, augment_itemdb_entry
-from common import ROConn
+from common.classes.database import ROConn
 from model.timeseries import sql_timeseries_insert
 from sqlite.row_factories import factory_idx0, factory_dict
 from util.logger import prt

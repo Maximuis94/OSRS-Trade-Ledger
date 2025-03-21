@@ -8,6 +8,8 @@ from collections.abc import Iterable
 from dataclasses import dataclass, field
 from typing import Callable, Dict, Optional, Tuple
 
+from overrides import override
+
 import global_variables.path as gp
 from global_variables.local_file import rt_prices_snapshot as realtime
 from interfaces.db_entity import DbEntity
@@ -40,7 +42,7 @@ class Item(DbEntity):
     target_buy: int = field(default=0, compare=False)
     target_sell: int = field(default=0, compare=False)
     item_group: str = field(default='', compare=False)
-    count_item: bool = field(default=1, compare=False)
+    count_item: int = field(default=1, compare=False)
     
     # Attributes derived from timeseries data - initialized lazily
     _current_ge: Optional[int] = field(default=None, init=False, compare=False)
@@ -66,27 +68,27 @@ class Item(DbEntity):
         
         self._current_ge = c.execute(
             f"""SELECT price FROM "{table}" WHERE src=0 ORDER BY timestamp DESC"""
-        ).fetchone()
-        self._current_buy = min(rt_entry)
-        self._current_sell = max(rt_entry)
+        ).fetchone() or 0
+        self._current_buy = min(rt_entry) or 0
+        self._current_sell = max(rt_entry) or 0
         self._current_avg = int(c.execute(
             f"""SELECT AVG((SELECT price FROM "{table}"
                             WHERE price > 0 AND src > 0
                             ORDER BY timestamp DESC LIMIT 7)) """
-        ).fetchone())
+        ).fetchone() or 0)
         self._avg_volume_day = int(c.execute(
             f"""SELECT AVG(volume) FROM "{table}" WHERE src=0
                             ORDER BY timestamp DESC LIMIT 7"""
-        ).fetchone())
+        ).fetchone() or 0)
         self._current_tax = min(5000000, int(math.floor(self._current_sell * 0.01)))
         self._margin = self._current_sell - self._current_buy
         
         sql_count = f"""SELECT COUNT(*) FROM "{table}" WHERE src=? """
-        self._n_wiki = c.execute(sql_count, (0, )).fetchone()
-        self._n_avg5m_b = c.execute(sql_count, (1, )).fetchone()
-        self._n_avg5m_s = c.execute(sql_count, (2, )).fetchone()
-        self._n_rt_b = c.execute(sql_count, (3, )).fetchone()
-        self._n_rt_s = c.execute(sql_count, (4, )).fetchone()
+        self._n_wiki = c.execute(sql_count, (0, )).fetchone() or 0
+        self._n_avg5m_b = c.execute(sql_count, (1, )).fetchone() or 0
+        self._n_avg5m_s = c.execute(sql_count, (2, )).fetchone() or 0
+        self._n_rt_b = c.execute(sql_count, (3, )).fetchone() or 0
+        self._n_rt_s = c.execute(sql_count, (4, )).fetchone() or 0
         
         self._live_data_loaded = True
 
@@ -94,73 +96,73 @@ class Item(DbEntity):
     def current_ge(self) -> int:
         if not self._live_data_loaded:
             self._load_live_data()
-        return self._current_ge
+        return self._current_ge or 0
 
     @property
     def current_buy(self) -> int:
         if not self._live_data_loaded:
             self._load_live_data()
-        return self._current_buy
+        return self._current_buy or 0
 
     @property
     def current_sell(self) -> int:
         if not self._live_data_loaded:
             self._load_live_data()
-        return self._current_sell
+        return self._current_sell or 0
 
     @property
     def current_avg(self) -> int:
         if not self._live_data_loaded:
             self._load_live_data()
-        return self._current_avg
+        return self._current_avg or 0
 
     @property
     def avg_volume_day(self) -> int:
         if not self._live_data_loaded:
             self._load_live_data()
-        return self._avg_volume_day
+        return self._avg_volume_day or 0
 
     @property
     def current_tax(self) -> int:
         if not self._live_data_loaded:
             self._load_live_data()
-        return self._current_tax
+        return self._current_tax or 0
 
     @property
     def margin(self) -> int:
         if not self._live_data_loaded:
             self._load_live_data()
-        return self._margin
+        return self._margin or 0
 
     @property
     def n_wiki(self) -> int:
         if not self._live_data_loaded:
             self._load_live_data()
-        return self._n_wiki
+        return self._n_wiki or 0
 
     @property
     def n_avg5m_b(self) -> int:
         if not self._live_data_loaded:
             self._load_live_data()
-        return self._n_avg5m_b
+        return self._n_avg5m_b or 0
 
     @property
     def n_avg5m_s(self) -> int:
         if not self._live_data_loaded:
             self._load_live_data()
-        return self._n_avg5m_s
+        return self._n_avg5m_s or 0
 
     @property
     def n_rt_b(self) -> int:
         if not self._live_data_loaded:
             self._load_live_data()
-        return self._n_rt_b
+        return self._n_rt_b or 0
 
     @property
     def n_rt_s(self) -> int:
         if not self._live_data_loaded:
             self._load_live_data()
-        return self._n_rt_s
+        return self._n_rt_s or 0
 
     @property
     def sqlite_path(self) -> str:
@@ -175,7 +177,7 @@ class Item(DbEntity):
     @property
     def sqlite_row_factory(self) -> Optional[Callable[[sqlite3.Cursor, tuple], any]]:
         """The row factory that is specifically designed for this DbEntity"""
-        return lambda c, row: self.__class__.__init__(self.__class__, *row)
+        return lambda c, row: Item(*row)
     
     @property
     def sqlite_attributes(self) -> Tuple[str, ...]:
@@ -198,18 +200,19 @@ class Item(DbEntity):
     @property
     def sqlite_insert(self) -> str:
         """Returns an executable SQLite INSERT statement"""
-        placeholders = str(tuple("?" for _ in self.sqlite_attributes))
-        return f""""INSERT OR REPLACE INTO "{self.sqlite_table}" {self.sqlite_attributes} VALUES {placeholders}"""
+        placeholders = str(tuple("?" for _ in self.sqlite_attributes)).replace("'", "")
+        return f"""INSERT OR REPLACE INTO "{self.sqlite_table}" {self.sqlite_attributes} VALUES {placeholders}"""
     
     @property
     def sqlite_update(self) -> str:
         """Returns an executable SQLite UPDATE statement"""
-        raise NotImplementedError("Override this property if you wish to use it")
+        set_clause = ", ".join(f"{attr}=?" for attr in self.sqlite_attributes)
+        return f"""UPDATE "{self.sqlite_table}" SET {set_clause} WHERE item_id=?"""
     
     @property
     def sqlite_delete(self) -> str:
         """Returns an executable SQLite DELETE statement"""
-        raise NotImplementedError("Override this property if you wish to use it")
+        return f"""DELETE FROM "{self.sqlite_table}" WHERE item_id=?"""
     
     @property
     def sqlite_connect(self) -> sqlite3.Connection:
@@ -235,29 +238,74 @@ class Item(DbEntity):
     @property
     def sqlite_create(self) -> Optional[str]:
         """CREATE TABLE statement for this entity"""
-        return None
+        return f"""
+        CREATE TABLE IF NOT EXISTS "{self.sqlite_table}" (
+            id INTEGER PRIMARY KEY,
+            item_id INTEGER NOT NULL UNIQUE,
+            item_name TEXT NOT NULL,
+            members BOOLEAN NOT NULL,
+            alch_value INTEGER NOT NULL,
+            buy_limit INTEGER NOT NULL,
+            stackable BOOLEAN NOT NULL,
+            release_date INTEGER NOT NULL,
+            equipable BOOLEAN NOT NULL,
+            weight REAL NOT NULL,
+            update_ts INTEGER NOT NULL,
+            augment_data INTEGER DEFAULT 0,
+            remap_to INTEGER DEFAULT 0,
+            remap_price REAL DEFAULT 0,
+            remap_quantity REAL DEFAULT 0,
+            target_buy INTEGER DEFAULT 0,
+            target_sell INTEGER DEFAULT 0,
+            item_group TEXT DEFAULT '',
+            count_item INTEGER DEFAULT 1
+        )"""
     
     @property
     def sqlite_trigger(self) -> Optional[str | Iterable[str]]:
         """Executable SQL for adding 0-N triggers related to this entity to the database"""
-        return None
+        return [
+            f"""
+            CREATE TRIGGER IF NOT EXISTS update_ts_{self.sqlite_table}
+            AFTER UPDATE ON "{self.sqlite_table}"
+            BEGIN
+                UPDATE "{self.sqlite_table}" 
+                SET update_ts = unixepoch()
+                WHERE item_id = NEW.item_id;
+            END
+            """
+        ]
     
     @property
     def sqlite_index(self) -> Optional[str | Iterable[str]]:
         """Executable SQL for adding 0-N indices related to this entity to the database"""
-        return None
+        return [
+            f"""CREATE INDEX IF NOT EXISTS idx_{self.sqlite_table}_item_id ON "{self.sqlite_table}"(item_id)""",
+            f"""CREATE INDEX IF NOT EXISTS idx_{self.sqlite_table}_item_name ON "{self.sqlite_table}"(item_name)"""
+        ]
     
     @classmethod
     @property
     def sqlite_view(cls) -> Optional[str | Iterable[str]]:
         """Executable SQL for adding 0-N views used to display information about this entity to the database"""
-        return None
+        return [
+            """
+            CREATE VIEW IF NOT EXISTS v_items AS
+            SELECT item_id, item_name, members, alch_value, buy_limit
+            FROM item
+            WHERE remap_to = 0
+            """
+        ]
     
     @staticmethod
-    def create(item_id, c: Optional[sqlite3.Cursor] = None):
+    def create(item_id, c: Optional[sqlite3.Cursor] = None) -> Optional['Item']:
         """Creates an instance of Item with item_id=`item_id`"""
-        # Note: this example uses a read-only connection.
-        c = sqlite3.connect(f"file:{Item.sqlite_path.fget(Item)}?mode=ro", uri=True)
-        c.row_factory = lambda cursor, row: Item(*row)
+        if c is None:
+            conn = sqlite3.connect(f"file:{Item.sqlite_path.fget(Item)}?mode=ro", uri=True)
+            c = conn.cursor()
+            c.row_factory = lambda cursor, row: Item(*row)
+        
         query = f"""SELECT {", ".join(Item.sqlite_attributes.fget(Item))} FROM item WHERE item_id=?"""
-        return c.execute(query, (item_id,)).fetchone()
+        result = c.execute(query, (item_id,)).fetchone()
+        
+        return result

@@ -40,9 +40,24 @@ index_raw_exchange_logger_transaction_item_timestamp = \
 index_raw_transaction_item_status_timestamp = \
     """CREATE INDEX idx_item_status_timestamp ON "raw_transaction" (item_id, status, timestamp);"""
 
+create_transaction_timestamp_idx = """
+CREATE INDEX IF NOT EXISTS idx_transaction_timestamp 
+ON raw_transaction(timestamp)
+"""
+
+create_transaction_item_account_idx = """
+CREATE INDEX IF NOT EXISTS idx_transaction_item_account 
+ON raw_transaction(item_id, account_name)
+"""
+
+create_transaction_source_idx = """
+CREATE INDEX IF NOT EXISTS idx_transaction_source 
+ON raw_transaction(source)
+"""
+
 _dict = dict(locals())
 _keys = ('item_item', 'transaction_item_status_timestamp', 'inventory_item_timestamp', 'inventory_transactionid',
-         'transaction_item_timestamp', 'raw_runelite_export_transaction_item_timestamp', 'raw_flipping_utilities_transaction_item_timestamp', 'raw_exchange_logger_transaction_item_timestamp', 'raw_transaction_item_status_timestamp')
+         'transaction_item_timestamp', 'raw_runelite_export_transaction_item_timestamp', 'raw_flipping_utilities_transaction_item_timestamp', 'raw_exchange_logger_transaction_item_timestamp', 'raw_transaction_item_status_timestamp', 'create_transaction_timestamp_idx', 'create_transaction_item_account_idx', 'create_transaction_source_idx')
 
 sql_create_index = namedtuple(
     "CreateIndexSQL",
