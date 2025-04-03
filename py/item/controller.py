@@ -5,7 +5,7 @@ Module with Item Controller class
 import sqlite3
 from typing import Literal, Tuple, Dict, Callable
 
-from interfaces.db_entity import DbEntity
+from databases.db_entity import DbEntity
 from item.model import Item as ItemModel
 import global_variables.path as gp
 

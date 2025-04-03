@@ -52,7 +52,7 @@ from overrides import override
 import common.classes.item
 import common.row_factories as factories
 # import util.verify as verify
-from file.file import IFile
+from file.file import File, IFile
 from common.classes.table import Column, Table
 from util import verify
 from util.data_structures import *

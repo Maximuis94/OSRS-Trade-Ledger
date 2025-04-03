@@ -177,7 +177,7 @@ dtypes_by_py = {_locals.get(dt).py: _locals.get(dt) for dt in _dtype_keys}
 
 dtypes_merged = list(dtypes_by_sql.keys()) + list(dtypes_by_df.keys()) + list(dtypes_by_py.keys())
 
-# Below are lists that are specific to certain entities, which should reduce time needed to fetch data.
+# Below are lists that are specific to certain entity, which should reduce time needed to fetch data.
 # transaction_columns = [
 #     'transaction_id', 'item_id', 'timestamp', 'is_buy', 'quantity', 'price', 'status', 'tag', 'update_ts'
 # ]

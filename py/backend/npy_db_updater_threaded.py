@@ -25,10 +25,9 @@ import util.unix_time as ut
 from common.item import create_item, Item
 from data_processing.npy_array_computations import avg_price_summed_volume
 from file.file import File
-from common.classes.data_classes import NpyDatapoint as NpyDp
-from global_variables.datapoint import NpyDatapoint
-from common import DataSource, SRC
-from common import Database
+from global_variables.datapoint import NpyDatapoint as NpyDp
+from common.classes.data_source import DataSource, SRC
+from common.classes.database import Database
 from tasks.async_task import AsyncTask
 __t0__ = time.perf_counter()
 
@@ -54,8 +53,8 @@ _files_imported = 0
 _db_size_start, f_db = gp.f_db_npy.fsize(), gp.f_db_npy
 
 _r = ("'", "")
-_columns = str(NpyDatapoint.__match_args__).replace(*_r)
-_values = str(tuple(['?' for _ in range(len(NpyDatapoint.__match_args__))])).replace(*_r)
+_columns = str(NpyDp.__match_args__).replace(*_r)
+_values = str(tuple(['?' for _ in range(len(NpyDp.__match_args__))])).replace(*_r)
 sql_i_end = f"""{_columns} VALUES {_values}"""
 
 
@@ -64,11 +63,10 @@ class NpyDbUpdater(Database):
     Class representation of the Npy Database. Used for managing Npy Array data.
     
     """
-    NpyDatapoint = NpyDp
-    npy_columns = NpyDatapoint.__match_args__
+    npy_columns = NpyDp.__match_args__
     array_directory = gp.dir_npy_arrays
-    sql_i = f"""INSERT OR REPLACE INTO ___{str(NpyDatapoint.__match_args__)}
-                            VALUES {str(tuple(['?' for _ in NpyDatapoint.__match_args__]))}""".replace("'", "")
+    sql_i = f"""INSERT OR REPLACE INTO ___{str(NpyDp.__match_args__)}
+                            VALUES {str(tuple(['?' for _ in NpyDp.__match_args__]))}""".replace("'", "")
     sql_del_rows: str = """DELETE FROM ___ WHERE timestamp < ?"""
     sql_count_del: str = f"""SELECT COUNT(*) FROM ___ WHERE timestamp < ?"""
     sql_fetch_src_wiki: str = f"""SELECT ?, price, volume, MAX(timestamp) FROM ___ WHERE src={SRC.w} AND timestamp<?"""
@@ -151,10 +149,10 @@ class NpyDbUpdater(Database):
             self.add_npy_array_files = add_arrays
             
             if kwargs.get('dp') is not None:
-                self.NpyDatapoint = kwargs.get('dp')
-                if len(self.NpyDatapoint.__match_args__) < len(self.npy_columns):
+                NpyDp = kwargs.get('dp')
+                if len(NpyDp.__match_args__) < len(self.npy_columns):
                     raise ValueError("dp can be passed to add additional columns, but this one seems to have less")
-                self.npy_columns = self.NpyDatapoint.__match_args__
+                self.npy_columns = NpyDp.__match_args__
             
             self.sql_c = self.get_create_table_sql()
             
@@ -175,7 +173,7 @@ class NpyDbUpdater(Database):
             self.con_npy = self.cursor()
             self.con_npy.row_factory = self.factory_extract_npy
             self.column_file = gp.f_npy_column
-            # self.con_npy.row_factory = lambda c, row: self.NpyDatapoint(*row)
+            # self.con_npy.row_factory = lambda c, row: NpyDp(*row)
             self.con_by_src_id = [
                 self.ts_con_wiki,
                 self.ts_con_avg5m,
@@ -589,14 +587,14 @@ class NpyDbUpdater(Database):
     def factory_extract_npy(c: sqlite3.Cursor, row: tuple):
         """ Row factory that can be set to a sqlite3.Connection """
         try:
-            return NpyDbUpdater.NpyDatapoint(*row)
+            return NpyDp(*row)
         except TypeError:
-            return NpyDbUpdater.NpyDatapoint(*row[:len(NpyDbUpdater.npy_columns)])
+            return NpyDp(*row[:len(NpyDbUpdater.npy_columns)])
     
     @staticmethod
     def generate_template_db(path: File = File(gp.dir_template+'npy.db')):
         """ Generate a template db+npy file, which has one table, to get an impression of what the db looks like. """
-        dp = namedtuple('NpyDatapoint', list(NpyDbUpdater.NpyDatapoint.__match_args__) + ['src', 'price', 'volume'])
+        dp = namedtuple('NpyDatapoint', list(NpyDp.__match_args__) + ['src', 'price', 'volume'])
         
         if path.exists() and path.fsize() > pow(10, 7):
             raise FileExistsError(f'File already exists at {path}. Are you sure you want to create a template db here?')
@@ -615,7 +613,7 @@ class NpyDbUpdater(Database):
         """ Returns an executable sqlite statement for creating a table for item `item_id` """
         sql_c = f"""CREATE TABLE "item___"(""" if item_id is None else f"""CREATE TABLE "item{item_id:0>5}"("""
     
-        for col in NpyDbUpdater.NpyDatapoint.__match_args__:
+        for col in NpyDp.__match_args__:
             if col[:3] == "gap" or "coefficient" in col:
                 sql_c += f""""{col}" REAL NOT NULL DEFAULT 0.0, """
             else:
@@ -820,7 +818,7 @@ def get_sqls(item_id: int) -> Tuple[str, str]:
     
     table = f"'item{item_id:0>5}'"
     sql_c = f"""CREATE TABLE IF NOT EXISTS {table}("""
-    for col in NpyDatapoint.__match_args__:
+    for col in NpyDp.__match_args__:
         if col[:3] == 'gap' or 'coefficient' in col:
             sql_c += f""""{col}" REAL NOT NULL DEFAULT 0.0, """
         else:
@@ -995,7 +993,7 @@ class UpdaterThreadManager:
     t1_floor_value: int = cfg.npy_round_t1
     db_from: File = gp.f_db_timeseries
     db_to: File = gp.f_db_npy
-    npy_columns: Tuple[str] = NpyDatapoint.__match_args__
+    npy_columns: Tuple[str] = NpyDp.__match_args__
     
     def __init__(self, n_threads: int = 3, item_ids: List[int] = go.npy_items,
                  start_time: int or float = time.perf_counter()):

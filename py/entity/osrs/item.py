@@ -5,15 +5,15 @@ import math
 import sqlite3
 from collections.abc import Iterable
 from dataclasses import dataclass, field
-from typing import Callable, Dict, Optional, Tuple
+from typing import Callable, Dict, Literal, Optional, Tuple
 
 import global_variables.path as gp
+from entity.localdb import LocalDbEntity
 from global_variables.local_file import rt_prices_snapshot as realtime
-from databases.db_entity import DbEntity
 
 
 @dataclass(slots=True, match_args=False)
-class Item(DbEntity):
+class Item(LocalDbEntity):
     """
     Item class that describes how an Item is represented in the associated SQLite database.
     A subset of attributes is defined via timeseries data using lazy loading (i.e. attributes are initialized when
@@ -159,26 +159,16 @@ class Item(DbEntity):
         if not self._live_data_loaded:
             self._load_live_data()
         return self._n_rt_s
-
-    @property
-    def sqlite_path(self) -> str:
-        """The path to the database associated with this Entity"""
-        return str(gp.f_db_local)
     
     @property
-    def sqlite_table(self) -> str:
+    def sqlite_table(self) -> Literal['item']:
         """The name of the table in the sqlite database"""
         return "item"
     
     @property
-    def sqlite_timeseries_table(self) -> str:
-        """The name of the table of associated with this item in the timeseries database"""
-        return f"item{self.item_id:0>5}"
-    
-    @property
-    def sqlite_row_factory(self) -> Optional[Callable[[sqlite3.Cursor, tuple], any]]:
+    def sqlite_row_factory(self) -> Optional[Callable[[sqlite3.Cursor, tuple], 'Item']]:
         """The row factory that is specifically designed for this DbEntity"""
-        return lambda c, row: self.__class__.__init__(self.__class__, *row)
+        return lambda c, row: Item(*row)
     
     @property
     def sqlite_attributes(self) -> Tuple[str, ...]:
@@ -213,27 +203,6 @@ class Item(DbEntity):
     def sqlite_delete(self) -> str:
         """Returns an executable SQLite DELETE statement"""
         raise NotImplementedError("Override this property if you wish to use it")
-    
-    @property
-    def sqlite_connect(self) -> sqlite3.Connection:
-        """Establish and return a writable connection to the database"""
-        return sqlite3.connect(self.sqlite_path)
-    
-    @property
-    def sqlite_connect_ro(self) -> sqlite3.Connection:
-        """Establish and return a read-only connection to the database"""
-        return sqlite3.connect(f"file:{self.sqlite_path}?mode=ro", uri=True)
-    
-    @property
-    def sqlite_cursor_ro_factory(self) -> sqlite3.Cursor:
-        """Establish a read-only connection with the db, extract a cursor, set the row factory and return the cursor"""
-        conn = self.sqlite_connect_ro
-        if self.sqlite_row_factory:
-            cursor = conn.cursor()
-            cursor.row_factory = self.sqlite_row_factory
-            return cursor
-        else:
-            return conn.cursor()
     
     @property
     def sqlite_create(self) -> Optional[str]:

@@ -1,15 +1,13 @@
 # import model.item
 import os.path
-import sqlite3
-import time
 
 import pandas as pd
+import sqlite3
+from typing import Dict
 
-from backend.download import realtime_prices
+from common.classes.database import Database
 from global_variables.importer import *
-from item.itemdb import itemdb
-from model.database import Database
-from model.timeseries import TimeseriesDB
+from item.db_entity import Item
 
 
 # threaded_task = AsyncTask()
@@ -108,152 +106,116 @@ def remove_rows(id_threshold: int, db_path: str):
 
 # if __name__ =
 
+def process_table(conn: sqlite3.Connection, con_npy: sqlite3.Connection, table: str):
+    
+    print(conn.execute(f"""SELECT * FROM {table}""").fetchall())
+    print(con_npy.execute(f"""SELECT * FROM {table}""").fetchall())
 
+    print('\n'*5)
+    
+def prices(con: sqlite3.Connection, table: str):
+    sql = f"SELECT MIN(price), MAX(PRICE) FROM {table} WHERE src=0 AND timestamp > ?"
+    sql_avg5m = f"SELECT MIN(price), MAX(PRICE) FROM {table} WHERE src BETWEEN 1 AND 2 AND volume > 0 AND timestamp > ?"
+    return {
+         "all": con.execute(f"SELECT MIN(price), MAX(PRICE) FROM {table} WHERE src=0").fetchone(),
+         "2y": con.execute(sql, ((time.time()-86400*730)//86400*86400,)).fetchone(),
+         "1y": con.execute(sql, ((time.time()-86400*365)//86400*86400,)).fetchone(),
+         "1y-avg5m": con.execute(sql_avg5m, ((time.time()-86400*365)//86400*86400,)).fetchone(),
+         "6m": con.execute(sql, ((time.time()-86400*180)//86400*86400,)).fetchone(),
+         "3m": con.execute(sql, ((time.time()-86400*90)//86400*86400,)).fetchone(),
+         "1m": con.execute(sql, ((time.time()-86400*30)//86400*86400,)).fetchone(),
+         "2w": con.execute(sql, ((time.time()-86400*14)//86400*86400,)).fetchone(),
+         "1w": con.execute(sql, ((time.time()-86400*7)//86400*86400,)).fetchone(),
+         "1w-avg5m": con.execute(sql_avg5m, ((time.time()-86400*7)//86400*86400,)).fetchone(),
+        "n_rt": con.execute(f"SELECT COUNT(*) FROM {table} WHERE src>2 AND timestamp > ?", ((time.time()-86400*30)//86400*86400,)).fetchone()[0],
+        "n_avg5m": con.execute(f"SELECT COUNT(*) FROM {table} WHERE src BETWEEN 1 AND 2 AND timestamp > ? AND volume > 0", ((time.time()-86400*30)//86400*86400,)).fetchone()[0],
+        "daily_volume": int(con.execute(f"SELECT AVG(VOLUME) FROM {table} WHERE src=0 ORDER BY timestamp DESC LIMIT 14").fetchone()[0])
+    }
 
-
+def extract_row(_item: Item, row: Dict[str, Tuple[int, int] | int]) -> Dict[str, any]:
+    return {
+        "item": _item.item_name,
+        "2y-low": row["2y"][0],
+        "2y-high": row["2y"][1],
+        "1y-low": row["1y"][0],
+        "1y-high": row["1y"][1],
+        "1y-avg5m-low": row["1y-avg5m"][0],
+        "1y-avg5m-high": row["1y-avg5m"][1],
+        "1m-low": row["1m"][0],
+        "1m-high": row["1m"][1],
+        "1w-low": row["1w"][0],
+        "1w-high": row["1w"][1],
+        "1w-avg5m-low": row["1w-avg5m"][0],
+        "1w-avg5m-high": row["1w-avg5m"][1],
+        "1w-avg5m-margin": row["1w-avg5m"][1]-row["1w-avg5m"][0],
+        "n_rt": row["n_rt"],
+        "n_avg5m": row["n_avg5m"],
+        "cur-buy": item.current_buy,
+        "cur-sell": item.current_sell,
+        "cur-price": item.current_ge
+    }
+ordered_keys = ("item", "cur-price", "cur-buy", "cur-sell", "avg_volume_day", "margin", "n_rt", "n_avg5m", "1w-low", "1w-high", "1w-avg5m-low", "1w-avg5m-high", "1w-avg5m-margin", "1m-low", "1m-high", "1y-low", "1y-high", "1y-avg5m-low", "1y-avg5m-high", "2y-low", "2y-high")
 if __name__ == "__main__":
+    from data_processing.npy_per_week import *
+    exit(1)
+    
+    
+    
+    db_npy = Database(gp.f_db_npy)
     db = Database(gp.f_db_timeseries)
-    rp = realtime_prices(True)
-    
-    for item_id in go.item_ids:
-        sql = f"""SELECT price, volume FROM item{item_id:0>5} WHERE src=0 ORDER BY timestamp DESC"""
-        sql2 = f"""SELECT price FROM item{item_id:0>5} WHERE src IN (1, 2) and price > 0 ORDER BY timestamp DESC LIMIT 1"""
-        try:
-            wiki_price, wiki_volume = db.execute(sql, factory=tuple).fetchone()
-        except TypeError:
-            continue
-        
-        if wiki_price is None:
-            continue
-        try:
-            buy_price = min(db.execute(sql2, factory=0).fetchall())
-        except ValueError:
-            continue
-        if buy_price == 0 or wiki_price < 10000 and wiki_price / buy_price - 1 < .1 or wiki_volume * (wiki_price - buy_price) < 1000000:
-            continue
-            
-        if (wiki_price-buy_price) * itemdb[item_id].buy_limit > 1000000 and wiki_price > 10000 and wiki_price / buy_price - 1 > .5:
-            print(item_id, go.id_name[item_id], wiki_price, buy_price, (wiki_price-buy_price) * itemdb[item_id].buy_limit, "" if buy_price == 0 else f"{(wiki_price / buy_price - 1) * 100:.1f}%")
-            
-        elif itemdb[item_id].buy_limit == 0 and wiki_price - buy_price > 1000 and not itemdb[item_id].equipable:
-            # print("lim=0", item_id, go.id_name[item_id], wiki_price, buy_price, wiki_price - buy_price)
-            ...
-    
-    # for item_id in go.item_ids[:100]:
-    #     print(f"SELECT * FROM item{item_id:0>5}")
-    # guide_prices = {item_id: db.execute(f"SELECT * FROM item{item_id:0>5}").fetchall() for item_id in go.npy_items[:100]}
-    
-    exit(883738462)
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    # from global_variables import path as gp, osrs as go
-    # con = sqlite3.connect(gp.f_db_npy)
-    #
-    # for i in range(max(go.item_ids)+10):
-    #     try:
-    #         con.execute(f"DELETE FROM 'item{i:0>5}' WHERE timestamp >= 1729468800")
-    #     except sqlite3.OperationalError:
-    #         ...
-    # con.commit()
+    from item.db_entity import Item
+    i = Item.create(2)
+    if isinstance(i, Item):
+        print(i.current_sell, i.current_buy, i.current_ge)
     # exit(1)
     
-    
-    
-    import pandas as pd
-    import util.unix_time as ut
-    # con = sqlite3.connect(gp.dir_data+'to_import/dbs_merged.db')
-    wd = gp.dir_data + 'to_import/'
-    skipped = 0
-    
-    con_from = sqlite3.connect(wd+'old_realtime_data.db')
-    con = sqlite3.connect(gp.f_db_timeseries)
-    con_from.row_factory = lambda c, row: row[0]
-    select = """SELECT src, timestamp, price, 0 FROM "timeseries" WHERE timestamp > 1664748000 AND item_id=?"""
-    item_ids = con_from.execute("SELECT DISTINCT item_id FROM timeseries").fetchall()
-    con_from.row_factory = lambda c, row: row
-    for item_id in item_ids:
-        print(f"Current id:", item_id, end='\r')
-        con.executemany(f"""INSERT INTO "item{item_id:0>5}"(src, timestamp, price, volume) VALUES (?, ?, ?, ?)""",
-                        con_from.execute(select, (item_id,)))
-    con.commit()
-    con.close()
-    exit(1)
-            
-    # for i in range(2):
-    #     data = pd.read_pickle(f"""{gp.dir_data}to_import/realtime_{i:0>3}.dat""")
-    #     for row in data.to_dict('records'):
-    #         try:
-    #             con.execute(f"""INSERT INTO "timeseries"(item_id, src, timestamp, price, volume) VALUES (?, ?, ?, ?, 0)""",
-    #                         (row['item_id'], 3+int(row['is_sale']), row['timestamp'], row['price']))
-    #         except sqlite3.IntegrityError:
-    #             skipped += 1
-    #     print(f"Added files from [{gp.dir_data}to_import/realtime_{i:0>3}.dat]")
-    # con.commit()
-    # con.close()
-    # print(f'Skipped a total of {skipped} rows')
-    # con_from = sqlite3.connect(wd+'local_database.db')
-    # for src, table in enumerate(['realtimelow', 'realtimehigh']):
-    #     con_from.row_factory = lambda c, row: row[0]
-    #     item_ids = con_from.execute(f"SELECT DISTINCT item_id FROM {table}").fetchall()
-    #     con_from.row_factory = lambda c, row: row
-    #     src += 3
-    #
-    #     for item_id in item_ids:
-    #         sql_s = f"""SELECT {item_id}, {src}, timestamp, price FROM {table} WHERE item_id={item_id}"""
-    #         sql_i = f"""INSERT OR REPLACE INTO "timeseries"(item_id, src, timestamp, price, volume) VALUES (?, ?, ?, ?, 0)"""
-    #         con.executemany(sql_i, con_from.execute(sql_s))
-    #     con.commit()
-    i = 0
-    for db_file, tables in zip(['full_database.db', 'scraped_database.db', 'full_database - Copy.db'], (['realtimelow', 'realtimehigh'], ['rt_low', 'rt_high'], ['realtimelow', 'realtimehigh'])):
-        print(f"""\n\nOpening db file {db_file}...""")
-        # if i < 2:
-        #     i += 1
-        #     continue
-        con_from = sqlite3.connect(wd + db_file)
-        con_from.execute("VACUUM")
-        for src, table in enumerate(tables):
-            src += 3
-            try:
-                con_from.execute(f"""CREATE INDEX "index_{table}" ON "{table}" ("item_id" ASC)""")
-                print(f"Creating index for table {table} (src={src})")
-                con_from.commit()
-            except sqlite3.OperationalError:
-                print(f"Index for table {table} (src={src}) already exists")
-            con_from.row_factory = lambda c, row: row[0]
-            item_ids = con_from.execute(f"SELECT DISTINCT item_id FROM {table}").fetchall()
-            con_from.row_factory = lambda c, row: row
-            
-            for item_id in item_ids:
-                print(f"""File: {db_file} Table: {table} item_id: {item_id}""", end='\r')
-                sql_s = f"""SELECT {item_id}, {src}, timestamp, price FROM {table} WHERE item_id={item_id}"""
-                sql_i = f"""INSERT OR REPLACE INTO "timeseries"(item_id, src, timestamp, price, volume) VALUES (?, ?, ?, ?, 0)"""
-                con.executemany(sql_i, con_from.execute(sql_s))
-            con.commit()
-            print('')
-        break
-        
-    # print(data.loc[data.item_id==2])
-    print(ut.utc_unix_dt(1615499027))
+    c = db_npy.cursor()
+    c.row_factory = lambda cursor, row: row[0]
+    rows = []
+    tables = c.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()
+    n_items = len(tables)
+    keys = []
+    blacklist = []
+    for idx, i in enumerate(tables):
+        # if len(rows) > 2:
+        #     break
+        item = Item.create(int(i[4:]))
+        item_prices = prices(db, i)
+        if item_prices['daily_volume'] > item.buy_limit*4 and (item_prices['2w'][0]) < (item_prices['2y'][0])*1.25:
+            # print(item.item_name)
+            # print(item)
+            # for k, v in item_prices.items():
+            #     print(k, v)
+            # print('\n\n')
+            row = extract_row(item, item_prices)
+            if len(keys) == 0:
+                for k in item.__dir__():
+                    try:
+                        if k.startswith('_') or k in blacklist or row.get(k) is not None:
+                            continue
+                        value = item.__getattribute__(k)
+                        if isinstance(value, (int, float)):
+                            row[k] = value
+                            keys.append(k)
+                    except NotImplementedError:
+                        blacklist.append(k)
+                        continue
+            else:
+                for k in keys:
+                    try:
+                        if k.startswith('_') or k in blacklist or row.get(k) is not None:
+                            continue
+                        value = item.__getattribute__(k)
+                        if isinstance(value, (int, float)):
+                            row[k] = value
+                            keys.append(k)
+                    except NotImplementedError:
+                        blacklist.append(k)
+                        continue
+            rows.append({k: row[k] for k in ordered_keys})
+            print(f"current item_id: {item.item_id} {item.item_name} ({idx}/{n_items})"+' '*10, end='\r')
+    pd.DataFrame(rows).to_csv('test.csv', index=False)
     exit(1)
     
     
-    
-    import util.data_structures as ds
-    a = {'a': 12, 'b': 13, 'c': 14, 'd': 15}
-    b = {'a': 2, 'b': 3, 'c': 4}
-    c = ds.update_existing_dict_values(a, b)
-    print(c)
-    a = {'a': 12, 'b': 13, 'c': 14, 'd': 15}
-    b = {'a': 2, 'b': 3, 'c': 4}
-    c = ds.update_existing_dict_values(b, a)
-    print(c)
     

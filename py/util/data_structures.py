@@ -5,11 +5,10 @@ Methods in this module are extensively commented
 """
 import sqlite3
 from collections.abc import Iterable
-from typing import Dict, Callable
-
+from typing import Callable, Dict
 from venv_auto_loader.active_venv import *
+
 import global_variables.variables as var
-from common.classes.data_classes import TimeseriesRow
 from global_variables.datapoint import Avg5mDatapoint, RealtimeDatapoint, WikiDatapoint
 
 __t0__ = time.perf_counter()
@@ -62,7 +61,7 @@ def convert_dtype_df_sqlite(df_dtype: str) -> str:
     return var.dtypes_by_df.get(df_dtype).sql
 
 
-def datapoint(row: dict) -> List[TimeseriesRow]:
+def datapoint(row: dict) -> List[any]:
     """ Parse dict `row`, convert it to the appropriate LegacyDatapoint and then to a TimeseriesDatapoint """
     row = {k: row.get(k) for k in var.legacy_keys if row.get(k) is not None}
     keys = tuple(row.keys())

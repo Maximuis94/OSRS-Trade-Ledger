@@ -466,7 +466,11 @@ def submit_transaction_queue(queue_file: File = gp.f_exchange_log_queue, submit_
         if csv_file is not None:
             dat_file = File(csv_file.replace('.csv', '.dat'))
             if csv_file.exists():
-                df = pd.concat([pd.read_pickle(dat_file), pd.DataFrame([t.sql_row() for t in submitted])])
+                try:
+                    rows = pd.read_pickle(dat_file)
+                except ModuleNotFoundError:
+                    rows = pd.read_csv(csv_file)
+                df = pd.concat([rows, pd.DataFrame([t.sql_row() for t in submitted])])
             else:
                 df = pd.DataFrame([t.sql_row() for t in submitted])
             df['item_name'] = df.apply(lambda r: r.item_name if isinstance(r, Item) else go.id_name[int(r.get('item_id'))], axis=1)

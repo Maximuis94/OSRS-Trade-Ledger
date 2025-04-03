@@ -29,7 +29,7 @@ global_variables.variables
     This module contains all namedtuples produced by some of the factories
     
 model.
-    The model dir has several implementations of entities as classes, each with their own
+    The model dir has several implementations of entity as classes, each with their own
     row factory. The
 
 
