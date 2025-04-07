@@ -96,7 +96,7 @@ _This section is used to explore new potentially interesting items to trade. It 
 while it shows a specifically ordered list on the left, starting with most recently traded items. If an entry from the 
 top listbox is clicked, the graph changes to that particular item. 
 The bottom listbox will be updated with data of that item as well; it shows summarized data, aggregated per 4-hour 
-interval, allowing one to act on (this was actually the initial purpose of this tab, hence the name);
+interval, allowing one to act on (this was actually the initial purpose of this tab, hence the name);_
 - s_24h_high shows the highest sell price across all 4h intervals for the past 24 hours
 - s_24h_last shows this sell price for the most recent 4h interval
 - b_x_y shows the recommended buy price for the interval spanning from xxh-yyh (e.g. 12:00-16:00). The 4-hour interval 
@@ -122,9 +122,11 @@ Much like the price per day of week, only per hour of the day.
 
 
 
-# Changes relative to OSRS-GE-Ledger
+# Changes relative to previous repo
 
 As of now, the following components have been successfully implemented;
+
+
 ### Folder structure
 - Modules are now stored in separate directories, making the project much more tidy
 - Exact categorization is a work in progress, though.
@@ -162,13 +164,13 @@ As of now, the following components have been successfully implemented;
     encountered situations that required aggregating such data, however, since the data is always separated per item.
 
 ### Npy arrays -> sqlite database
-- Npy arrays now have their own SQLite database. Its name lives on, as this database is still named the npy database.
+- Npy arrays now have their own SQLite database. The name it retained, though some, as this database is still named the npy database.
 - The updater protocol was migrated as well, with a massive decrease in runtime (from ~12-15 minutes to 2-3 minutes)
 - The prices listbox was expanded to 56 days coverage, computing it was noticeably faster via SQLite
 - Sqlite db made it much more intuitive to only add new rows while updating, rather than regenerating all data. The
   improved updater protocol made me revise the timespan of the npy database as well, which was increased from ~60 days 
     to 456 days
-- Ideally, the npy database is computed using SQL.
+- Additionally, database computation is fully shifted to SQLite
 
 ### Object-oriented approach / dataclasses
 - A more object-oriented approach was implemented in nearly all modules
