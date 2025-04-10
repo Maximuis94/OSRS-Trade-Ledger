@@ -13,6 +13,7 @@ import time
 import urllib.error
 import urllib.request
 from typing import Tuple, Optional
+from warnings import warn
 
 import requests
 from bs4 import BeautifulSoup
@@ -27,8 +28,11 @@ import util.unix_time as ut
 __t0__ = time.perf_counter()
 
 _request_header = {
-    'User-Agent': 'Homemade GE trading GUI/DB | Disc: Maximuis94'
+    'User-Agent': ''
 }
+
+if _request_header['User-Agent'] == '':
+    warn("Warning! No user agent has been configured...")
 
 
 # This method should be accessed through global_variables.local_file.RealtimePricesSnapshot
