@@ -33,7 +33,7 @@ try:
     # print(_cfg)
     # Override some directories from the config file
     dir_root = _cfg['pc_dir_root']
-    dir_rbpi = _cfg['dir_rbpi']
+    dir_rbpi = _cfg.get('dir_rbpi', "NON-EXISTENT_DIRECTORY")
     dir_exchange_log_src = _cfg['dir_exchange_log_src']
     dir_flipping_utilities_src = _cfg['dir_flipping_utilities_src']
     dir_archive = _cfg['dir_archive']

@@ -12,8 +12,36 @@ from file.util import load, save
 _config_file: str = '/data/resources/roots.json'
 _cwd = str(os.getcwd()).replace('\\', '/')
 
-while not os.path.exists(_cwd+os.path.split(_config_file)[0]):
+while not os.path.exists(_cwd+_config_file) and len(_cwd) > 3:
+    print(_cwd)
     _cwd = os.path.split(_cwd)[0]
+
+
+def generate_roots_config(*roots, output_file: str = None):
+    """ Generate a json file with roots that can be used throughout the project. """
+    output_file = _config_file if output_file is None else output_file
+    
+    # save({root.key: root._asdict() for root in roots if root.exists()}, path=output_file)
+    save({root.key: root._asdict() for root in roots}, path=output_file)
+    print(f"Config file was saved at {output_file}.")
+
+
+# Does roots.json exist?
+if len(_cwd) == 3:
+    _split = f"{os.sep}py{os.sep}"
+    out_dir = os.path.join(os.getcwd().split(_split)[0], 'data', 'resources')
+    os.makedirs(out_dir, exist_ok=True)
+    out_file = os.path.join(out_dir, "roots.json")
+    generate_roots_config(
+        Root("dir_rbpi", "", "dir_rbpi"),
+        Root("dir_archive", "", "dir_archive"),
+        Root("dir_downloads", "", "dir_downloads"),
+        Root("dir_exchange_log_src", "", "dir_exchange_log_src"),
+        output_file=out_file
+    )
+    msg = f"roots.json file was created at {out_file}. Please configure the root directories before proceeding."
+    raise RuntimeError(msg)
+
 os.chdir(_cwd)
 _config_file = _cwd + _config_file
 _cwd = _cwd + '/'
@@ -68,12 +96,4 @@ def parse_roots_config(path: str = None, vars_needed: Tuple[str] = None, verbose
                                 f"{'\n\t'.join(non_existing)}\n"
                                 " Update the roots.config file or create the directories.")
     return output
-
-
-def generate_roots_config(*roots, output_file: str = None):
-    """ Generate a json file with roots that can be used throughout the project. """
-    output_file = _config_file if output_file is None else output_file
-    
-    save({root.key: root._asdict() for root in roots if root.exists()}, path=output_file)
-    print(f"Config file was saved at {output_file}.")
     
