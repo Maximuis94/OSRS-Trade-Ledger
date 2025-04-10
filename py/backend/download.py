@@ -12,6 +12,7 @@ import sqlite3
 import time
 import urllib.error
 import urllib.request
+from typing import Tuple, Optional
 
 import requests
 from bs4 import BeautifulSoup
@@ -76,6 +77,29 @@ def realtime_prices(check_rbpi: bool = False, force_rbpi: bool = False) -> dict:
             return {}
     data = {int(item_id): tuple((data.get(item_id).get(p) for p in price_keys)) for item_id in list(data.keys())}
     return data
+
+
+def wiki_item_ids() -> Tuple[Optional[str], ...]:
+    """
+    Download the mapping of item_id : item_names from https://oldschool.runescape.wiki/?title=Module:GEIDs/data.json.
+
+
+    Returns
+    -------
+
+    """
+    url = "https://oldschool.runescape.wiki/?title=Module:GEIDs/data.json&action=raw&ctype=application%2Fjson"
+    req = urllib.request.Request(url, headers={'User-Agent': 'High-res price data scraper'})
+
+    try:
+        with urllib.request.urlopen(req) as handle:
+            _json = json.loads(handle.read().decode())
+            id_name = {_id: _name for _name, _id in _json.items() if not _name.startswith('%')}
+
+            return tuple([id_name.get(_id, None) for _id in range(max(list(id_name.keys()))+1)])
+    except urllib.error.HTTPError as e:
+        print(f"ERROR downloading the item_id : item_name mapping in download.wiki_item_ids()\n\tURL: {url}")
+        raise e
 
 
 # This method should be accessed through global_variables.local_file.ItemWikiMapping
@@ -331,3 +355,4 @@ def graph_wiki_historical(item_id: int, t1: int or float = 0, t2: int or float =
             return graph
     except urllib.error.HTTPError as e:
         return None
+
