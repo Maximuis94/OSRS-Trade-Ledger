@@ -40,4 +40,7 @@ def extract_article(url: str):
 
 
 urls = get_articles(2025, 4)
+
+for u in urls:
+    print(u)
 ...

@@ -226,6 +226,18 @@ class DbEntity(ABC):
             if not sql.strip().startswith(prefix):
                 msg = f"Property '{attribute}' does not meet the expected format as it does not start with {prefix}"
                 warnings.warn(msg)
+                
+    @staticmethod
+    @final
+    def factory_el0(c: sqlite3.Cursor, row: tuple) -> int | str | float:
+        """Row factory that returns the first element"""
+        return row[0]
+        
+    @staticmethod
+    @final
+    def factory_dict(c: sqlite3.Cursor, row: tuple) -> Dict[str, int | str | float]:
+        """Row factory that returns the first element"""
+        return {c[0]: row[i] for i, c in enumerate(c.description)}
         
         
         

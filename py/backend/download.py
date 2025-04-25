@@ -12,8 +12,7 @@ import sqlite3
 import time
 import urllib.error
 import urllib.request
-from typing import Tuple, Optional
-from warnings import warn
+from typing import Tuple, Optional, Dict, Literal
 
 import requests
 from bs4 import BeautifulSoup
@@ -28,11 +27,8 @@ import util.unix_time as ut
 __t0__ = time.perf_counter()
 
 _request_header = {
-    'User-Agent': ''
+    'User-Agent': 'Homemade GE trading GUI/DB | Disc: Maximuis94'
 }
-
-if _request_header['User-Agent'] == '':
-    warn("Warning! No user agent has been configured...")
 
 
 # This method should be accessed through global_variables.local_file.RealtimePricesSnapshot
@@ -79,17 +75,36 @@ def realtime_prices(check_rbpi: bool = False, force_rbpi: bool = False) -> dict:
         except urllib.error.HTTPError as e:
             print(f"ERROR in download_wiki_prices_latest, url={url}\n{e}")
             return {}
-    data = {int(item_id): tuple((data.get(item_id).get(p) for p in price_keys)) for item_id in list(data.keys())}
+        data = {int(item_id): tuple((data.get(item_id).get(p) for p in price_keys)) for item_id in list(data.keys())}
     return data
 
 
 def wiki_item_ids() -> Tuple[Optional[str], ...]:
     """
-    Download the mapping of item_id : item_names from https://oldschool.runescape.wiki/?title=Module:GEIDs/data.json.
+    Fetches item ID to item name mapping from the Old School RuneScape Wiki.
 
+    This function retrieves a JSON file containing item ID to name mappings directly
+    from the Old School RuneScape Wiki. It filters out any entries where the name
+    starts with the '%' character and generates a sequenced tuple of item names,
+    indexed by the item IDs. If an item ID is missing in the data, its corresponding
+    index in the tuple will be `None`.
 
     Returns
     -------
+    tuple of Optional[str]
+        A tuple where the index corresponds to the item ID, and the value is either
+        the name of the item or `None` if the item ID is not available/mapped.
+
+    Raises
+    ------
+    urllib.error.HTTPError
+        If an error occurs while attempting to download the JSON data from the
+        specified URL.
+    
+    Examples
+    --------
+    >>> ids = wiki_item_ids()
+    >>> ids[2] == "Cannonball"
 
     """
     url = "https://oldschool.runescape.wiki/?title=Module:GEIDs/data.json&action=raw&ctype=application%2Fjson"
@@ -107,8 +122,35 @@ def wiki_item_ids() -> Tuple[Optional[str], ...]:
 
 
 # This method should be accessed through global_variables.local_file.ItemWikiMapping
-def wiki_mapping() -> dict:
-    """ Download the wiki mapping, which consists of item metadata for all items. """
+def wiki_mapping() -> Dict[int, Dict[str, int | str]]:
+    """
+    Fetches and parses the item mapping data from the RuneScape Wiki API.
+
+    This function sends a GET request to the provided RuneScape Wiki API endpoint
+    to retrieve the item mapping data. The data is decoded and returned as a
+    dictionary, where the key is the item's numeric ID and the value is the
+    corresponding item mapping data.
+
+    Returns
+    -------
+    Dict[int,
+        Dict[Literal['examine'] | Literal['id'] | Literal['members'] | Literal['lowalch'] | Literal['limit'] |
+        Literal['value'] | Literal['highalch'] | Literal['icon'] | Literal['name'], int | str]
+        The result from the call to the Wiki Mapping API url
+
+    Raises
+    ------
+    urllib.error.HTTPError
+        If there is an issue with the HTTP request, such as an invalid URL or
+        server error, the error will be caught and logged, and an empty dictionary
+        will be returned.
+        
+    Examples
+    --------
+    >>> ids = wiki_mapping()
+    >>> ids.get(0) is None
+    >>> ids[2].get("name") == "Cannonball"
+    """
     url = "https://prices.runescape.wiki/api/v1/osrs/mapping"
     req = urllib.request.Request(url, headers={'User-Agent': 'High-res price data scraper'})
     try:

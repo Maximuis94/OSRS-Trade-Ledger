@@ -57,8 +57,11 @@ class RealtimePricesSnapshot(LocalFile, metaclass=SingletonMeta):
         if not isinstance(self.file_content, dict):
             print(f'Type verification for file {self.path} failed. File type={type(self.file_content)} (Expected=dict)')
             return False
-        el = self.file_content.get(list(self.file_content.keys())[0])
-        return isinstance(el, tuple) and len(el) == 2
+        try:
+            el = self.file_content.get(list(self.file_content.keys())[0])
+            return isinstance(el, tuple) and len(el) == 2
+        except IndexError:
+            return False
     
     def updated_content(self, **kwargs) -> dict:
         """ Download a realtime prices snapshot and return it """
@@ -88,6 +91,7 @@ class RealtimePricesSnapshot(LocalFile, metaclass=SingletonMeta):
     
     def __getitem__(self, item: int) -> Tuple[int, int]:
         return self.get_price(item)
+
 
 rt_prices_snapshot = RealtimePricesSnapshot()
 

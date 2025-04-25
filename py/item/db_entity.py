@@ -58,7 +58,7 @@ class Item(DbEntity):
     def _load_live_data(self) -> None:
         """Lazy-loads live trade data attributes from the SQLite database."""
         c = sqlite3.connect(f"file:{gp.f_db_timeseries}?mode=ro", uri=True)
-        c.row_factory = lambda _c, _r: _r[0]
+        c.row_factory = self.factory_el0
         table = f"item{self.item_id:0>5}"
         rt_entry = realtime[self.item_id]
         
