@@ -84,7 +84,7 @@ insert_item_dict = \
 
 insert_raw_transaction_from_import = \
     """
-    INSERT INTO raw_transaction ( item_id, timestamp_created, timestamp, timestamp_runelite_export, is_buy, quantity, max_quantity, price, offered_price, value, account_name, ge_slot, update_timestamp ) VALUES ( :item_id, :timestamp_created, :timestamp, :timestamp_runelite_export, :is_buy, :quantity, :max_quantity, :price, :offered_price, :value, :account_name, :ge_slot, :update_timestamp );
+    INSERT INTO raw_transaction ( item_id, timestamp_created, timestamp, timestamp_runelite_export, is_buy, quantity, max_quantity, price, offered_price, value, account_name, ge_slot, status, update_timestamp ) VALUES ( :item_id, :timestamp_created, :timestamp, :timestamp_runelite_export, :is_buy, :quantity, :max_quantity, :price, :offered_price, :value, :account_name, :ge_slot, :status, :update_timestamp );
     """
 """INSERT statement used when importing transactions into raw_transaction table"""
 

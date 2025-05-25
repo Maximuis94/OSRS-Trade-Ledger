@@ -6,7 +6,7 @@ from transaction.constants import TableList
 
 raw_transaction_from_exchange_logger = \
     f"""
-        UPDATE "{TableList.RAW_TRANSACTION}"
+        UPDATE {TableList.RAW_TRANSACTION}
             SET
                 timestamp = ?,
                 offered_price = ?,
@@ -23,7 +23,7 @@ raw_transaction_from_exchange_logger = \
 
 raw_transaction_from_exchange_logger_dict = \
     f"""
-    UPDATE "{TableList.RAW_TRANSACTION}"
+    UPDATE {TableList.RAW_TRANSACTION}
     SET
         timestamp = :timestamp,
         offered_price = :offered_price,
@@ -46,7 +46,7 @@ raw_transaction_from_exchange_logger_dict = \
 
 raw_transaction_from_flipping_utilities_transaction = \
     f"""
-    UPDATE "{TableList.RAW_TRANSACTION}"
+    UPDATE {TableList.RAW_TRANSACTION}
     SET
         timestamp = ?,
         timestamp_created = ?,
@@ -61,7 +61,7 @@ raw_transaction_from_flipping_utilities_transaction = \
 
 raw_transaction_from_flipping_utilities_transaction_dict = \
     f"""
-    UPDATE "{TableList.RAW_TRANSACTION}"
+    UPDATE {TableList.RAW_TRANSACTION}
     SET
         timestamp = :timestamp,
         timestamp_created = :timestamp_created,
@@ -76,7 +76,7 @@ raw_transaction_from_flipping_utilities_transaction_dict = \
 
 raw_transaction_from_runelite_export_transaction = \
     f"""
-    UPDATE "{TableList.RAW_TRANSACTION}"
+    UPDATE {TableList.RAW_TRANSACTION}
     SET
         timestamp_runelite_export = :timestamp,
         account_name = CASE WHEN account_name IS NULL THEN ? ELSE account_name END,
@@ -88,7 +88,7 @@ raw_transaction_from_runelite_export_transaction = \
 
 raw_transaction_from_runelite_export_transaction_dict = \
     f"""
-    UPDATE "{TableList.RAW_TRANSACTION}"
+    UPDATE {TableList.RAW_TRANSACTION}
     SET
         timestamp_runelite_export = :timestamp,
         account_name = CASE WHEN account_name IS NULL THEN :account_name ELSE account_name END,
@@ -99,9 +99,9 @@ raw_transaction_from_runelite_export_transaction_dict = \
 """SQL statement used to update a raw_transaction row with runelite export data provided via a dict"""
 
 raw_transaction_from_import_update = \
-    f"""UPDATE "{TableList.RAW_TRANSACTION}" SET update_timestamp=?, tag=?, status=? WHERE transaction_id=?"""
+    f"""UPDATE {TableList.RAW_TRANSACTION} SET update_timestamp=?, tag=?, status=? WHERE transaction_id=?"""
 f"""Update the raw_transaction row such that its update_timestamp, tag en status"""
-sql_update_transaction = (f'UPDATE "{TableList.TRANSACTION}" SET '
+sql_update_transaction = (f'UPDATE {TableList.TRANSACTION} SET '
                           'item_id = rt.item_id, '
                           'timestamp_created = rt.timestamp_created, '
                           'timestamp = rt.timestamp, '
@@ -114,6 +114,6 @@ sql_update_transaction = (f'UPDATE "{TableList.TRANSACTION}" SET '
                           'account_name = rt.account_name, '
                           'ge_slot = rt.ge_slot, '
                           'update_timestamp = rt.update_timestamp '
-                          f'FROM "{TableList.RAW_TRANSACTION}" rt '
+                          f'FROM {TableList.RAW_TRANSACTION} rt '
                           f'WHERE "transaction".raw_transaction_id = rt.transaction_id; ')
 """UPDATE statement used to update an entry from the transaction table with raw_transation data"""

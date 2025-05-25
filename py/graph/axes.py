@@ -24,7 +24,7 @@ dp_kwargs = {
 
 # @dataclass(frozen=True, slots=True, order=True, match_args=True)
 class XUnixTimestamp(XAxis, IAxis):
-    """ x-axis with unix timestamps """
+    """x-axis with unix timestamps"""
     timestamp: int or float
     
     def __init__(self, **kwargs):

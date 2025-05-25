@@ -18,7 +18,7 @@ from multipledispatch import dispatch
 from venv_auto_loader.active_venv import *
 from global_variables.importer import *
 from item.db_entity import Item
-from data_processing import util_proc as ud
+from data_processing import util as ud
 __t0__ = time.perf_counter()
 
 

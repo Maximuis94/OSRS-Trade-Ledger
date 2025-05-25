@@ -80,20 +80,20 @@ def _merge_json_files(*json_files, account_name: str, merge_to: str | File = gp.
             # print(idx, json_entry.key, json_entry)
         n_added = len(merged) - n_added
         entry_counts[json_file] = n_added
-        if not os.path.exists(merge_to) or not os.path.samefile(json_file, merge_to):
-            temp_file = os.path.join(gp.dir_export_parser_temp, f"{account_name}-{file_id:0>2}.json")
-            if ".runelite" in json_file:
-                shutil.copy2(json_file, temp_file)
-            else:
-                os.rename(json_file, temp_file)
-            temp_files.append(temp_file)
+        # if not os.path.exists(merge_to) or not os.path.samefile(json_file, merge_to):
+        #     temp_file = os.path.join(gp.dir_export_parser_temp, f"{account_name}-{file_id:0>2}.json")
+        #     if ".runelite" in json_file:
+        #         shutil.copy2(json_file, temp_file)
+        #     else:
+        #         os.rename(json_file, temp_file)
+        #     temp_files.append(temp_file)
     
     if len(merged) > 0:
         json.dump({k: v.dict for k, v in merged.items()}, open(merge_to, 'w'), indent=2)
         print(merge_to, len(merged))
     
-    for temp_file in temp_files:
-        os.rename(temp_file, temp_file.replace(gp.dir_export_parser_temp, transfer_to))
+    # for temp_file in temp_files:
+    #     os.rename(temp_file, temp_file.replace(gp.dir_export_parser_temp, transfer_to))
         
     # json.dump(entry_counts, open(os.path.join(gp.dir_output, "entry_counts.json"), 'w'), indent=2)
     return list(merged.values())

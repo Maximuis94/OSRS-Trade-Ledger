@@ -365,9 +365,8 @@ def insert_items(start_time: int or float = time.perf_counter()):
     sql = f"SELECT * FROM itemdb WHERE item_id IN ({', '.join([str(el) for el in new_items])})"
     # TODO: expand with data updates instead of just adding new items
     for item_row in c.execute(sql):
-        
-        item_row = {k: v for k, v in augment_itemdb_entry(Item(**item_row)).__dict__.items() if
-                    k in Item.sqlite_columns()}
+        _item = augment_itemdb_entry(Item(**item_row))
+        item_row = {a: _item.__getattribute__(a) for a in _item.sqlite_attributes}
         # print(item_row)
         # continue
         # exit(1)

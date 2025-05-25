@@ -46,8 +46,7 @@ os.chdir(_cwd)
 _config_file = _cwd + _config_file
 _cwd = _cwd + '/'
 
-_vars_needed: tuple = ('pc_dir_root', 'dir_rbpi', 'dir_exchange_log_src', 'dir_archive', 'dir_downloads',
-                       'dir_flipping_utilities_src', 'dir_databases')
+_vars_needed: tuple = ('pc_dir_root', 'dir_rbpi', 'dir_runelite_src', 'dir_archive', 'dir_downloads', 'dir_databases')
 
 
 def roots_config_error(e: Exception, cfg):

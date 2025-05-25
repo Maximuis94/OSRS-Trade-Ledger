@@ -16,7 +16,7 @@ from transaction.database.transaction_database import TransactionDatabase
 
 
 def parse_exports(runelite_exports: bool = True, exchange_logger: bool = True, flipping_utilities: bool = True,
-                  sync_transactions: bool = True, apply_min_timestamp: bool = True):
+                  sync_transactions: bool = True, apply_min_timestamp: bool = True, **kwargs):
     """Parses transaction exports from all three sources using default parameters"""
     transaction_database = TransactionDatabase()
     
@@ -31,22 +31,6 @@ def parse_exports(runelite_exports: bool = True, exchange_logger: bool = True, f
     # for ts in (min_el_ts, min_fu_ts, min_re_ts):
     #     print(datetime.datetime.fromtimestamp(ts).strftime('%Y-%m-%d %H:%M:%S'))
     # exit(1)
-    if runelite_exports:
-        t_exports = time.perf_counter()
-        
-        runelite_exports = merge_runelite_exports(min_ts=min_re_ts)
-        con = transaction_database.connect(read_only=True)
-        c = con.cursor()
-        c.row_factory = _factory_idx0
-        for e in runelite_exports:
-            if c.execute("SELECT COUNT(*) FROM raw_runelite_export_transaction WHERE "
-                         "item_id=? AND timestamp=? AND is_buy=? AND quantity=? AND price=? AND account_name=?",
-                         (e.item_id, e.timestamp, e.is_buy, e.quantity, e.price, e.account_name)).fetchone():
-                continue
-            
-            transaction_database.insert_runelite_export_transaction(e)
-        t_passed = time.perf_counter()-t_exports
-        print(f"\t* Parsed runelite exports in {t_passed:.1f} seconds")
         
     if exchange_logger:
         t_exchange = time.perf_counter()
@@ -83,6 +67,29 @@ def parse_exports(runelite_exports: bool = True, exchange_logger: bool = True, f
         t_passed = time.perf_counter()-t_flip
         print(f"\t* Parsed flipping utility exports in {t_passed:.1f} seconds")
     
+    if runelite_exports:
+        t_exports = time.perf_counter()
+        
+        runelite_exports = merge_runelite_exports(min_ts=min_re_ts)
+        con = transaction_database.connect(read_only=True)
+        c = con.cursor()
+        c.row_factory = _factory_idx0
+        for e in runelite_exports:
+            if c.execute("SELECT COUNT(*) FROM raw_runelite_export_transaction WHERE "
+                         "item_id=? AND timestamp=? AND is_buy=? AND quantity=? AND price=? AND account_name=?",
+                         (e.item_id, e.timestamp, e.is_buy, e.quantity, e.price, e.account_name)).fetchone():
+                continue
+            
+            transaction_database.insert_runelite_export_transaction(e)
+        t_passed = time.perf_counter() - t_exports
+        print(f"\t* Parsed runelite exports in {t_passed:.1f} seconds")
+    
+    if kwargs.get("import_transactions", False):
+        transaction_database.import_transactions(keys=('item_id', 'timestamp_created', 'timestamp',
+                                     'timestamp_runelite_export', 'is_buy', 'quantity', 'max_quantity',
+                                     'price', 'offered_price', 'shbjvjh', 'account_name', 'ge_slot', 'status', 'tag',
+                                     'update_ts'))
+    
     if sync_transactions:
         t_sync = time.perf_counter()
         transaction_database.sync_raw_table()
@@ -91,5 +98,6 @@ def parse_exports(runelite_exports: bool = True, exchange_logger: bool = True, f
     
     print(f"Parsed all exports in {time.time()-t0:.1f} seconds")
 
-parse_exports()
-exit(1)
+# parse_exports()
+# parse_exports(import_transactions=True)
+# exit(1)

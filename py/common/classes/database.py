@@ -141,9 +141,10 @@ class Database(sqlite3.Connection, IFile):
         sqlite_schema_factory = factories.get_row_factory(var.SqliteSchema)
         
         # Automatically extract tables and columns from the connected database
-        self.sql_tables: List[var.SqliteSchema] = self.execute(
-            "SELECT type, name, tbl_name, rootpage FROM sqlite_master WHERE type='table'",
-            factory=sqlite_schema_factory).fetchall()
+        _con = self.read_con
+        _con.row_factory = sqlite_schema_factory
+        self.sql_tables: List[var.SqliteSchema] = _con.execute(
+            "SELECT type, name, tbl_name, rootpage FROM sqlite_master WHERE type='table'").fetchall()
         self.sql_indices: List[var.SqliteSchema] = self.execute(
             "SELECT type, name, tbl_name, rootpage FROM sqlite_master WHERE type='index'",
             factory=sqlite_schema_factory).fetchall()

@@ -8,7 +8,7 @@ from typing import Tuple
 import numpy as np
 
 from common.classes.database import Database
-from data_processing.util_proc import floor_timestamp_window_size, get_min_value, get_max_value, get_percentile_value
+from data_processing.util import floor_timestamp_window_size, get_min_value, get_max_value, get_percentile_value
 from item.db_entity import Item
 
 _db: Database = None

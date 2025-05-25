@@ -16,7 +16,8 @@ from common.item import ItemController, augment_itemdb_entry
 from file.file import File
 from global_variables.importer import *
 from item.constants import ITEM_TABLE
-from item.controller import Item
+# from item.controller import Item
+from item.db_entity import Item
 
 
 class ItemDB(Database):
@@ -27,41 +28,48 @@ class ItemDB(Database):
         path = kwargs.pop('path', gp.f_db_local)
         self.table_name = kwargs.pop('table_name', 'item')
         super().__init__(File(path), read_only=read_only, tables=self.table_name,
-                         row_tuple=namedtuple("ItemTuple", Item.sqlite_attributes))
+                         row_tuple=namedtuple("ItemTuple", Item.sqlite_attributes.fget(self)))
         self.table = ITEM_TABLE
         self.tables = {self.table_name: self.table}
         self.row_factory = self.augmented_item_factory if augment_items else self.item_factory
         self.add_cursor(key=Item, rf=self.item_factory)
         # self.add_cursor(key=self.tuple)
         self.augment_items = augment_items
-        self.select_by_id = self.table.select + "WHERE item_id=:item_id"
-        self.select_by_name = self.table.select + "WHERE item_name=:item_name"
+        # self.select_by_id = self.table.select + "WHERE item_id=:item_id"
+        # self.select_by_name = self.table.select + "WHERE item_name=:item_name"
+        self.select_by_id = "SELECT * FROM item WHERE item_id=:item_id"
+        self.select_by_name = "SELECT * FROM item WHERE item_name=:item_name"
     
-    @overload
     def get_item(self, item_id: int, augment_items: bool = None) -> Item:
         """Fetch an Item with item_id=`item_id` from the sqlite database"""
         
-        self.set_item_factory(augment_items)
+        # self.set_item_factory(augment_items)
+        # self.row_factory = self.item_factory
+        cur = self.read_con
+        cur.row_factory = self.item_factory
         try:
-            return self.execute(self.select_by_id, {'item_id': item_id}).fetchone()
+            return cur.execute(self.select_by_id, {'item_id': item_id}).fetchone()
         except OSError as e:
             print(item_id, self.select_by_id)
             raise e
     
-    def get_item(self, item_name: str, augment_items: bool = None) -> Item:
-        """Fetch an Item with item_id=`item_id` from the sqlite database"""
-        self.set_item_factory(augment_items)
-        try:
-            return self.execute(self.select_by_name, {'item_name': item_name}).fetchone()
-        except OSError as e:
-            print(item_name, self.select_by_id)
-            raise e
+    # def get_item(self, item_name: str, augment_items: bool = None) -> Item:
+    #     """Fetch an Item with item_id=`item_id` from the sqlite database"""
+    #     self.set_item_factory(augment_items)
+    #     try:
+    #         return self.execute(self.select_by_name, {'item_name': item_name}).fetchone()
+    #     except OSError as e:
+    #         print(item_name, self.select_by_id)
+    #         raise e
     
     def all_items(self, augment_items: bool = None) -> List[Item]:
         """ Load all item rows from the database and return them """
         # print(self.table.select)
         self.set_item_factory(augment_items)
-        return self.execute(self.table.select).fetchall()
+        # return self.execute(self.table.select).fetchall()
+        cursor = self.read_con
+        cursor.row_factory = self.item_factory
+        return cursor.execute("SELECT * FROM item").fetchall()
     
     def insert_item(self, item: Item):
         """ Insert `item` as a new entry into the database. NB this will only create a new row! """
@@ -117,10 +125,11 @@ class ItemDB(Database):
     def item_factory(c: sqlite3.Cursor, row) -> Item:
         """ Convert a parsed sqlite row to an Item """
         # print(row)
-        return ItemController.add_data(
-            Item(*row)
-            # Item(item_id=row[0], from_dict={col[0]: Item.py_dtypes.get(col[0])(row[idx]) for idx, col in enumerate(c.description)})
-        )
+        return Item(*row)
+        # return ItemController.add_data(
+        #     Item(*row)
+        #     # Item(item_id=row[0], from_dict={col[0]: Item.py_dtypes.get(col[0])(row[idx]) for idx, col in enumerate(c.description)})
+        # )
     
     @staticmethod
     def item_factory_data_transfer(c, row):

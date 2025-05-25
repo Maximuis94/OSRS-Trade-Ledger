@@ -72,6 +72,8 @@ TODO: Reduce amount of logged transactions (?)
 
 
 """
+import datetime
+
 import json
 import os.path
 import sqlite3
@@ -135,7 +137,7 @@ def parse_line(i: str) -> dict:
     if i[0] == '{':
         i = json.loads(i)
         ts = [int(t) for t in (i.get('date').replace('-', ' ') + ' ' + i.get('time').replace(':', ' ')).split(' ')]
-        ts = int(time.mktime((ts[0], ts[1], ts[2], ts[3], ts[4], ts[5], 0, 0, 0)))
+        ts = int(datetime.datetime(ts[0], ts[1], ts[2], ts[3], ts[4], ts[5]).timestamp())
         state_id, slot_id = go.exchange_log_states.index(i.get('state')), int(i.get('slot'))
         is_buy, item_id, quantity = int(state_id < 3), int(i.get('item')), int(i.get('qty'))
         value, max_quantity = int(i.get('worth')), int(i.get('max'))

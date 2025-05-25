@@ -63,7 +63,7 @@ class Item(DbEntity):
         rt_entry = realtime[self.item_id]
         
         self._current_ge = c.execute(
-            f"""SELECT price FROM "{table}" WHERE src=0 ORDER BY timestamp DESC"""
+            f"""SELECT price FROM "{table}" WHERE src=0 ORDER BY timestamp DESC LIMIT 1"""
         ).fetchone()
         self._current_buy = min(rt_entry)
         self._current_sell = max(rt_entry)
@@ -159,6 +159,25 @@ class Item(DbEntity):
         if not self._live_data_loaded:
             self._load_live_data()
         return self._n_rt_s
+    
+    @property
+    def death_coffer_profit(self) -> Optional[int]:
+        """
+        Difference between the active buy price and the death coffer price for this item. Is None if the guide price is
+        below 10000.
+        
+        Returns
+        -------
+        int
+            floor(ge_price*1.05 - buy_price)
+        None
+            If the guide price is below 10000, None is returned
+
+        """
+        ge = self.current_ge
+        if ge < 10000:
+            return None
+        return int(self.current_ge*1.05) - self.current_buy
 
     @property
     def sqlite_path(self) -> str:

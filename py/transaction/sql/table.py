@@ -109,9 +109,54 @@ table_raw_flipping_utilities_transaction = \
     """
 
 
-table_raw_runelite_export_transaction = \
+# table_raw_runelite_export_transaction = \
+#     """
+#     CREATE TABLE "raw_runelite_export_transaction" (
+#         "transaction_id"	INTEGER,
+#         "item_id"	INTEGER NOT NULL,
+#         "timestamp"	INTEGER NOT NULL,
+#         "is_buy"	INTEGER NOT NULL,
+#         "quantity"	INTEGER NOT NULL,
+#         "price"	INTEGER NOT NULL,
+#         "account_name"	TEXT NOT NULL COLLATE NOCASE,
+#         "update_timestamp"	INTEGER NOT NULL,
+#         PRIMARY KEY("transaction_id"),
+#         FOREIGN KEY("account_name") REFERENCES "account"("account_name"),
+#         CHECK("is_buy" BETWEEN 0 AND 1),
+#         UNIQUE("item_id", "timestamp", "is_buy", "quantity", "price")
+#     )
+#     """
+
+
+table_raw_runelite_plugin_transaction = \
+"""
+CREATE TABLE "raw_runelite_plugin_transaction" (
+    "transaction_id"    INTEGER PRIMARY KEY AUTOINCREMENT,
+    "uuid"              TEXT UNIQUE,
+    "item_id"           INTEGER    NOT NULL,
+    "timestamp_created" INTEGER,
+    "timestamp"         INTEGER    NOT NULL,
+    "is_buy"            INTEGER    NOT NULL,
+    "quantity"          INTEGER    NOT NULL,
+    "max_quantity"      INTEGER    NOT NULL,
+    "price"             INTEGER    NOT NULL,
+    "offered_price"     INTEGER,
+    "value"             INTEGER,
+    "account_name"      TEXT       COLLATE NOCASE,
+    "ge_slot"           INTEGER,
+    "update_timestamp"  INTEGER    NOT NULL,
+
+    FOREIGN KEY("account_name") REFERENCES "account"("account_name"),
+    CHECK("is_buy"  BETWEEN 0 AND 1),
+    CHECK("ge_slot" IS NULL OR "ge_slot" BETWEEN 0 AND 7),
+    UNIQUE("item_id","timestamp","is_buy","quantity","price","ge_slot")
+);
+"""
+
+
+table_raw_runelite_profile_data_transaction = \
     """
-    CREATE TABLE "raw_runelite_export_transaction" (
+    CREATE TABLE "raw_runelite_profile_transaction" (
         "transaction_id"	INTEGER,
         "item_id"	INTEGER NOT NULL,
         "timestamp"	INTEGER NOT NULL,
@@ -122,9 +167,30 @@ table_raw_runelite_export_transaction = \
         "update_timestamp"	INTEGER NOT NULL,
         PRIMARY KEY("transaction_id"),
         FOREIGN KEY("account_name") REFERENCES "account"("account_name"),
-        CHECK("is_buy" BETWEEN 0 AND 1)
+        CHECK("is_buy" BETWEEN 0 AND 1),
+        UNIQUE("item_id", "timestamp", "is_buy", "quantity", "price")
     )
     """
+
+table_raw_runelite_export_transaction = """
+CREATE TABLE "raw_runelite_export_transactions" (
+    "transaction_id"    INTEGER,
+    "item_id"           INTEGER NOT NULL,
+    "timestamp"         INTEGER NOT NULL,
+    "is_buy"            INTEGER NOT NULL,
+    "quantity"          INTEGER NOT NULL,
+    "price"             INTEGER NOT NULL,
+    "account_name"      TEXT    NOT NULL COLLATE NOCASE,
+    "update_timestamp"  INTEGER NOT NULL,
+    PRIMARY KEY("transaction_id"),
+    UNIQUE("item_id","timestamp","is_buy","quantity","price"),
+    FOREIGN KEY("account_name") REFERENCES "account"("account_name"),
+    CHECK("is_buy" BETWEEN 0 AND 1)
+);
+
+
+
+"""
 
 
 table_raw_transaction = \
@@ -238,7 +304,7 @@ table_production = \
 _dict = dict(locals())
 
 _keys = ('account', 'inventory', 'item', 'raw_exchange_logger_transaction', 'raw_flipping_utilities_transaction',
-        'raw_runelite_export_transaction', 'raw_transaction', 'transaction', 'production', 'production_rule')
+         'raw_runelite_export_transaction', 'raw_transaction', 'transaction', 'production', 'production_rule')
 
 sql_create_table = (namedtuple(
     "CreateTableSQL",

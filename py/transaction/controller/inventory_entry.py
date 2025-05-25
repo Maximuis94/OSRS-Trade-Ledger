@@ -25,7 +25,7 @@ import global_variables.datapoint
 from common.item import create_item
 from common.classes.data_classes import ExeLogEntry
 from global_variables.values import ge_tax_min_ts
-from common import Database
+from common.classes.database import Database
 from model.transaction import *
 from transaction.transaction_model.inventory_entry import InventoryEntry as InventoryEntryModel
 from util.osrs import get_tax

@@ -233,7 +233,8 @@ def augment_itemdb_entry(item: Item, overwrite_data: bool = False) -> Item:
     
     # If augment_data has another value, it is to be considered immutable; truth is evaluated with n%2==1
     if item.augment_data in (0, 1):
-        item.augment_data = uo.assign_augmented_item_tag(item=item.__dict__)
+        # item.augment_data = uo.assign_augmented_item_tag(item=item.__dict__)
+        item.augment_data = uo.assign_augmented_item_tag(item={a: item.__getattribute__(a) for a in item.sqlite_attributes})
     
     # Only fill empty entries when not overwriting
     if overwrite_data or item.item_group == '':
@@ -244,7 +245,7 @@ def augment_itemdb_entry(item: Item, overwrite_data: bool = False) -> Item:
 
 def get_item(item_id: int, a: str = None) -> Item or any:
     """ Return an Item of the given `item_id`, or a specific attribute if `a` is specified """
-    return idb.get_item(item_id) if a is None else idb.get_item(item_id).__dict__.get(a)
+    return idb.get_item(item_id) if a is None else idb.get_item(item_id).__getattribute__(a)
 
 
 def item_exists(item_id: int) -> bool:
@@ -258,7 +259,7 @@ def item_exists(item_id: int) -> bool:
 class ItemController(Database):
     table_name: str
     tuple = common.classes.item.Item
-    wiki = Database(path=gp.f_db_timeseries, read_only=True)
+    wiki = Database(path=gp.f_db_timeseries, read_only=False)
     
     def __init__(self, augment_items: bool = True, read_only: bool = False, **kwargs):
         path = kwargs.pop('path', gp.f_db_local)

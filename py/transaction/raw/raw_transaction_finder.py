@@ -53,7 +53,7 @@ def runelite_export_exchange_logger(cur: sqlite3.Cursor, t: RuneliteExportEntry)
     """Returns SQL to find an identical transaction with Exchange Logger data, given a Runelite Export transaction"""
     sql = """SELECT transaction_id FROM "raw_transaction"
     WHERE item_id=? AND quantity=? AND timestamp BETWEEN ? AND ? AND is_buy=? AND price=?"""
-    values = (t.item_id, t.quantity, t.timestamp, t.timestamp+delta_t, t.is_buy, t.price)
+    values = (t.item_id, t.quantity, t.timestamp-delta_t, t.timestamp, t.is_buy, t.price)
     return cur.execute(sql, values).fetchone()
 
 

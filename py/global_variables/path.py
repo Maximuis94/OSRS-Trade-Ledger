@@ -34,8 +34,10 @@ try:
     # Override some directories from the config file
     dir_root = _cfg['pc_dir_root']
     dir_rbpi = _cfg.get('dir_rbpi', "NON-EXISTENT_DIRECTORY")
-    dir_exchange_log_src = _cfg['dir_exchange_log_src']
-    dir_flipping_utilities_src = _cfg['dir_flipping_utilities_src']
+    dir_runelite_root = _cfg['dir_runelite_src']
+    dir_runelite_profile_src = os.path.join(dir_runelite_root, 'profiles2/')
+    dir_exchange_log_src = os.path.join(dir_runelite_root, 'exchange-logger/')
+    dir_flipping_utilities_src = os.path.join(dir_runelite_root, 'flipping/')
     dir_archive = _cfg['dir_archive']
     dir_downloads = _cfg['dir_downloads']
     dir_databases = _cfg['dir_databases']
@@ -82,6 +84,8 @@ dir_runelite_ge_export_raw = dir_runelite_ge_export + 'raw/'
 dir_export_parser_temp = dir_data + 'export_parser_temp/'
 dir_flipping_utilities = dir_data + 'flipping_utilities/'
 dir_flipping_utilities_raw = dir_flipping_utilities + 'raw/'
+dir_runelite_profile = dir_data + 'runelite_profile_data/'
+dir_runelite_profile_raw = dir_runelite_profile + 'raw/'
 
 # Batch and backup related directories
 dir_batch = dir_data + 'batches/'
@@ -164,6 +168,7 @@ f_rbpi_merge_minutes: File = File(dir_rbpi + 'resources/rt_batch_merge_times.dat
 f_rbpi_transfer_log: File = File(dir_rbpi + 'resources/transfer_log.dat')
 f_rbpi_rt_prices: File = File(dir_rbpi + 'temp/realtime.dat')
 
+f_runelite_profile_properties: File = File(dir_runelite_profile_src + '$rsprofile--1.properties')
 f_runelite_exchange_log: File = File(dir_exchange_log_src + 'exchange.log')
 f_runelite_json_downloaded: File = File(dir_downloads + 'grand-exchange.json')
 f_runelite_ge_export_df_merged: File = File(dir_data + 'runelite-ge-export-dataframe.dat')

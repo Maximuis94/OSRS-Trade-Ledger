@@ -14,17 +14,18 @@ import sqlite3
 from collections.abc import Iterable
 from dataclasses import dataclass, field
 from multipledispatch import dispatch
-from typing import Dict, List, NamedTuple, Optional, Tuple
+from typing import Dict, List, Literal, NamedTuple, Optional, Tuple
 
 import global_variables.path as gp
-
+from timeseries.types import SrcLike, OrderBy, Orderable
+from timeseries.view import TimeseriesView, sql_create_timeseries_extension_view
 
 _tables_per_db = {}
 
 
 class TimeseriesDatapoint(NamedTuple):
     """
-    A single datapoint in the timeseries database.
+    A single datapoint in the timeseries database. The item_id was omitted on purpose due to
 
     Attributes
     ----------
@@ -80,6 +81,24 @@ class TimeseriesDatabase:
     _order_by: str = field(default=" ORDER BY src ASC, timestamp ASC", kw_only=True, repr=False, compare=False)
     """ORDER BY clause to apply by default."""
     
+    def __post_init__(self):
+        """Post-initialization, used to alter attributes after initialization. After this method they will be frozen."""
+        conn = sqlite3.Connection(self.path)
+        c = conn.cursor()
+        c.row_factory = lambda cur, row: row[0]
+
+        global _tables_per_db
+        if _tables_per_db.get(self.path):
+            tables = _tables_per_db[self.path]
+        else:
+            tables = c.execute("SELECT name FROM sqlite_master WHERE type='table' ORDER BY name").fetchall()
+            _tables_per_db[self.path] = tables
+        object.__setattr__(self, "tables", tuple([int(i[4:]) for i in tables if i.startswith('item')]))
+        
+        if not self.order_by.strip().startswith("ORDER BY"):
+            msg = f"The ORDER BY clause does not meet the expected format (_order_by={self._order_by})"
+            raise RuntimeError(msg)
+    
     def load_data(self, item_id: int | Iterable[int], *, source: Optional[int | Iterable[int]] = None, **kwargs) \
             -> Dict[int, Tuple[TimeseriesDatapoint, ...]]:
         """
@@ -132,28 +151,19 @@ class TimeseriesDatabase:
     def _load_data(self, item_ids: Tuple[int, ...], **kwargs) -> Dict[int, Tuple[TimeseriesDatapoint, ...]]:
         """Load data of one item_id from one source from the database"""
         return {i: self._get_rows(i, **kwargs) for i in item_ids}
-    
-    def __post_init__(self):
-        """Post-initialization, used to alter attributes after initialization. After this method they will be frozen."""
-        conn = sqlite3.Connection(self.path)
-        c = conn.cursor()
-        c.row_factory = lambda cur, row: row[0]
-
-        global _tables_per_db
-        if _tables_per_db.get(self.path):
-            tables = _tables_per_db[self.path]
-        else:
-            tables = c.execute("SELECT name FROM sqlite_master WHERE type='table' ORDER BY name").fetchall()
-            _tables_per_db[self.path] = tables
-        object.__setattr__(self, "tables", tuple([int(i[4:]) for i in tables if i.startswith('item')]))
         
-        if not self.order_by.strip().startswith("ORDER BY"):
-            msg = f"The ORDER BY clause does not meet the expected format (_order_by={self._order_by})"
-            raise RuntimeError(msg)
-        
-    def _connect(self) -> sqlite3.Connection:
+    @property
+    def connection(self) -> sqlite3.Connection:
         """Read-only connection to the database"""
         return sqlite3.connect(f"file:{self.path}?mode=ro", uri=True)
+    
+    @property
+    def cursor(self) -> sqlite3.Cursor:
+        """Cursor from a read-only connection with a TimeseriesDatapoint row factory"""
+        conn = self.connection
+        cursor = conn.cursor()
+        cursor.row_factory = _row_factory
+        return cursor
     
     def _table(self, item_id: int) -> str:
         """Name of the table for item `item_id`"""
@@ -224,6 +234,55 @@ class TimeseriesDatabase:
         parameters = tuple([el for el in (*((source,) if isinstance(source, int) or source is None else source), t0, t1) if el is not None])
         
         return tuple(cursor.execute(sql, parameters).fetchall())
+    
+    def get_rows(self, item: int, src: Optional[SrcLike] = None, t0: Optional[int] = None, t1: Optional[int] = None, **kwargs) -> List[TimeseriesDatapoint]:
+        """Executes a SELECT query for getting a specific set of rows, based on input parameters and returns the fetched
+        rows as TimeseriesDatapoints.
+        
+        Parameters
+        ----------
+        item : int
+            item_id of the item for which the data is needed
+        src : Optional[SrcLike], optional, None by default
+            One or more src values to fetch rows for. If omitted, include all sources.
+        t0 : Optional[int], optional, None by default
+            The lower bound timestamp (inclusive). If undefined, there is no lower bound.
+        t1 : Optional[int], optional, None by default
+            The lower bound timestamp (inclusive). If undefined, there is no lower bound.
+        
+        Other Parameters
+        ----------------
+        order_by : Orderable, optional, None by default
+            One or more OrderBy clause elements, or a pre-defined ORDER BY clause
+        
+        Returns
+        -------
+        List[TimeseriesDatapoint]
+            The rows that meet the specifications of the SELECT query, as a list of TimeseriesDatapoints.
+        """
+        return self.cursor.execute(
+        
+        
+        )
+    
+    def add_timeseries_view(self, ts_view: TimeseriesView, item_ids: Optional[int | Iterable[int]] = None):
+        """Extend the tables related to `item_ids` with the """
+        con = self.connection
+        c = con.cursor()
+        c.row_factory = lambda cursor, row: row[0]
+        
+        if item_ids is None:
+            item_ids = [int(table.lstrip("item")) for table in
+                            c.execute("""SELECT name FROM sqlite_master WHERE type='table'""").fetchall()
+                        if len(table) == 9 and table.startswith('item')]
+        else:
+            if isinstance(item_ids, int):
+                item_ids = [item_ids]
+        for item_id in item_ids:
+            con.execute(sql_create_timeseries_extension_view(item_id, ts_view))
+        con.commit()
+        print(f"Added {len(item_ids)} {ts_view.row_timespan} timeseries views to the database at '{self.path}'")
+        
         
 
 # Example usage;

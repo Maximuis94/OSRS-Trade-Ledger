@@ -127,6 +127,11 @@ class TransactionDatabase(BasicTransactionDatabase):#, RawTransactionDatabase):
             The keys to extract from the imported transactions
         """
         
+        if len(transactions) == 0:
+            old_con = sqlite3.connect(gp.f_db_local)
+            old_con.row_factory = factory_dict
+            transactions = old_con.execute(sql_select.all_transactions).fetchall()
+            
         conn = self.connect()
         c = conn.cursor()
         for t in transactions:
@@ -139,7 +144,7 @@ class TransactionDatabase(BasicTransactionDatabase):#, RawTransactionDatabase):
                 conn.execute(sql_insert.insert_raw_transaction_from_import, _t)
             else:
                 sql = """UPDATE raw_transaction SET update_timestamp=?, tag=?, status=? WHERE transaction_id=?"""
-                conn.execute(sql_update.raw_transaction_from_import_update, (t['update_ts'], t.get('tag'), t.get('status', 1), raw_id))
+                conn.execute(sql_update.raw_transaction_from_import_update, (t['update_ts'], t.get('tag'), t.get('status'), raw_id))
                 print(f"Skipped {_count} {t}")
         conn.commit()
         self.sync_raw_table()
@@ -178,13 +183,13 @@ class TransactionDatabase(BasicTransactionDatabase):#, RawTransactionDatabase):
         conn.execute("VACUUM")
         print("All rows have been cleared!")
         conn.close()
-        old_con = sqlite3.connect(gp.f_db_local)
-        old_con.row_factory = factory_dict
-        db.import_transactions(*old_con.execute(sql_select.all_transactions).fetchall(),
-                               keys=('item_id', 'timestamp_created', 'timestamp',
-                                     'timestamp_runelite_export', 'is_buy', 'quantity', 'max_quantity',
-                                     'price', 'offered_price', 'shbjvjh', 'account_name', 'ge_slot', 'status', 'tag',
-                                     'update_ts'))
+        # old_con = sqlite3.connect(gp.f_db_local)
+        # old_con.row_factory = factory_dict
+        # db.import_transactions(*old_con.execute(sql_select.all_transactions).fetchall(),
+        #                        keys=('item_id', 'timestamp_created', 'timestamp',
+        #                              'timestamp_runelite_export', 'is_buy', 'quantity', 'max_quantity',
+        #                              'price', 'offered_price', 'shbjvjh', 'account_name', 'ge_slot', 'status', 'tag',
+        #                              'update_ts'))
     
     def insert_flipping_utilities_transaction(self, entry: FlippingUtilitiesEntry, **kwargs):
         """
@@ -238,16 +243,21 @@ class TransactionDatabase(BasicTransactionDatabase):#, RawTransactionDatabase):
                                 "item_id": entry.item_id,
                                 "timestamp_created": entry.timestamp_created,
                                 "timestamp": entry.timestamp,
+                                "timestamp_runelite_export": None,
                                 "is_buy": entry.is_buy,
                                 "quantity": entry.quantity,
                                 "max_quantity": entry.max_quantity,
                                 "price": entry.price,
+                                "offered_price": None,
+                                "value": None,
                                 "account_name": entry.account_name,
                                 "ge_slot": None if entry.ge_slot == -1 else entry.ge_slot,
                                 "status": 1,
                                 "tag": None,
                                 "update_timestamp": update_timestamp,
-                                "raw_id": raw_id,
+                                "exchange_logger_id": None,
+                                "flipping_utilities_id": raw_id,
+                                "runelite_export_id": None
                             })
             conn.commit()
         
@@ -299,26 +309,47 @@ class TransactionDatabase(BasicTransactionDatabase):#, RawTransactionDatabase):
                     "max_quantity": entry.max_quantity,
                     "ge_slot": entry.ge_slot,
                     "update_timestamp": update_timestamp,
-                    "tag": "E",
                     "exchange_logger_id": raw_id,
                     "transaction_id": _ids[0]
                 })
             else:
-                cur.execute(sql_insert.insert_raw_exchange_logger_transaction_dict, {
-                    "item_id": entry.item_id,
-                    "timestamp": entry.timestamp,
-                    "is_buy": entry.is_buy,
-                    "quantity": entry.quantity,
-                    "max_quantity": entry.max_quantity,
-                    "price": entry.price,
-                    "offered_price": entry.offered_price,
-                    "value": entry.value,
-                    "ge_slot": entry.ge_slot,
-                    "status": 1,
-                    "optional_field": None,
-                    "update_timestamp": update_timestamp,
-                    "raw_id": raw_id,
-                })
+                # cur.execute(sql_insert.insert_raw_transaction_dict, {
+                #     "item_id": entry.item_id,
+                #     "timestamp": entry.timestamp,
+                #     "is_buy": entry.is_buy,
+                #     "quantity": entry.quantity,
+                #     "max_quantity": entry.max_quantity,
+                #     "price": entry.price,
+                #     "offered_price": entry.offered_price,
+                #     "value": entry.value,
+                #     "ge_slot": entry.ge_slot,
+                #     "status": 1,
+                #     "optional_field": None,
+                #     "update_timestamp": update_timestamp,
+                #     "raw_id": raw_id,
+                # })
+
+                cur.execute(sql_insert.insert_raw_transaction_dict,
+                            {
+                                "item_id": entry.item_id,
+                                "timestamp_created": None,
+                                "timestamp": entry.timestamp,
+                                "timestamp_runelite_export": None,
+                                "is_buy": entry.is_buy,
+                                "quantity": entry.quantity,
+                                "max_quantity": entry.max_quantity,
+                                "price": entry.price,
+                                "offered_price": entry.offered_price,
+                                "value": entry.value,
+                                "account_name": None,
+                                "ge_slot": entry.ge_slot,
+                                "status": 1,
+                                "tag": None,
+                                "update_timestamp": update_timestamp,
+                                "exchange_logger_id": raw_id,
+                                "flipping_utilities_id": None,
+                                "runelite_export_id": None,
+                            })
             conn.commit()
         
         except Exception as e:
@@ -358,6 +389,7 @@ class TransactionDatabase(BasicTransactionDatabase):#, RawTransactionDatabase):
                 return
             
             raw_id = cur.lastrowid
+            
             _ids = tuple(runelite_export(cur, entry).values())
             if len(_ids) > 0:
                 if len(set(_ids)) > 1:
@@ -382,6 +414,10 @@ class TransactionDatabase(BasicTransactionDatabase):#, RawTransactionDatabase):
                     "quantity": entry.quantity,
                     "update_timestamp": update_timestamp,
                     "price": entry.price,
+                    "status": 1,
+                    "tag": None,
+                    "exchange_logger_id": None,
+                    "flipping_utilities_id": None,
                     "runelite_export_id": raw_id,
                     "account_name": entry.account_name,
                 }
@@ -464,4 +500,6 @@ class TransactionDatabase(BasicTransactionDatabase):#, RawTransactionDatabase):
 # json.dump(json_to_list_of_rows(path), open(os.path.splitext(path)[0] + '.json', 'w'), indent=2)
 # print(rows)
 
-
+# tdb = TransactionDatabase()
+# tdb.reset_database()
+# exit(1)
